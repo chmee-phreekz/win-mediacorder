@@ -1,5 +1,5 @@
 {
   "profiles": {
-    "MediaRecorder (Unpackaged)": { "commandName": "Project" }
+    "MediaRecorder (Package)": { "commandName": "MsixPackage" }
   }
 }

@@ -32,11 +32,28 @@ public static class EffectRegistration
 
     private const string KeyRoot = @"SOFTWARE\Microsoft\WindowsRuntime\ActivatableClassId\";
 
+    /// <summary>True, wenn die App als MSIX-Paket (mit Paketidentität) läuft.</summary>
+    public static bool IsPackaged { get; } = DetectPackage();
+
+    private static bool DetectPackage()
+    {
+        try
+        {
+            return Windows.ApplicationModel.Package.Current is not null;
+        }
+        catch
+        {
+            return false; // ohne Paketidentität wirft Package.Current
+        }
+    }
+
     public static string HostPath => Path.Combine(AppContext.BaseDirectory, "WinRT.Host.dll");
 
     /// <summary>True, wenn alle Effekte auf genau diesen Programmordner registriert sind.</summary>
     public static bool IsRegisteredForThisInstall()
     {
+        // Als MSIX-Paket registriert Package.appxmanifest die Effekte, eine Registry-Registrierung entfällt.
+        if (IsPackaged) return true;
         foreach (var id in ClassIds)
             if (!IsRegistered(id)) return false;
         return true;

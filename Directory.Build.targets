@@ -44,8 +44,8 @@
     </PropertyGroup>
   </Target>
 
-  <!-- Zweite Absicherung: Symbolpaket ist für die unpackaged App ohnehin unnötig. -->
-  <PropertyGroup Condition="'$(WindowsPackageType)' == 'None'">
+  <!-- Zweite Absicherung: kein Symbolpaket (.appxsym), es wird für die lokale Entwicklung nicht gebraucht und erfordert mspdbcmf.exe. -->
+  <PropertyGroup>
     <AppxSymbolPackageEnabled>false</AppxSymbolPackageEnabled>
   </PropertyGroup>
 </Project>

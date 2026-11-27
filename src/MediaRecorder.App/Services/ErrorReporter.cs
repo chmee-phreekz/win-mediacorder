@@ -19,8 +19,24 @@ public static class ErrorReporter
     private static DispatcherQueue? _ui;
     private static int _dialogOpen;
 
-    public static string LogFolder { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MediaRecorder", "logs");
+    /// <summary>
+    /// Als MSIX-Paket liegt das Protokoll im Paketordner (%LOCALAPPDATA%\Packages\MediaRecorder.App_…\LocalState\logs),
+    /// sonst unter %LOCALAPPDATA%\MediaRecorder\logs.
+    /// </summary>
+    public static string LogFolder { get; } = ResolveLogFolder();
+
+    private static string ResolveLogFolder()
+    {
+        try
+        {
+            return Path.Combine(Windows.Storage.ApplicationData.Current.LocalFolder.Path, "logs");
+        }
+        catch
+        {
+            // Ohne Paketidentität (unpackaged) wirft ApplicationData.Current.
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MediaRecorder", "logs");
+        }
+    }
 
     public static string CurrentLogFile => Path.Combine(LogFolder, $"app-{DateTime.Now:yyyy-MM-dd}.log");
 
