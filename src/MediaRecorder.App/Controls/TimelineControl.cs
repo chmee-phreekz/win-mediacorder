@@ -557,7 +557,9 @@ public sealed class TimelineControl : UserControl
         Application.Current.Resources.TryGetValue(key, out var v) && v is Brush b ? b : new SolidColorBrush(Color.FromArgb(40, 255, 255, 255));
 
     private static Color ThemeColor(string key, Color fallback) =>
-        Application.Current.Resources.TryGetValue(key, out var v) && v is Color c ? c : fallback;
+        Application.Current.Resources.TryGetValue(key, out var v)
+            ? v switch { SolidColorBrush b => b.Color, Color c => c, _ => fallback }
+            : fallback;
 
     private static SolidColorBrush Brush(string key, Color fallback) => new(ThemeColor(key, fallback));
 

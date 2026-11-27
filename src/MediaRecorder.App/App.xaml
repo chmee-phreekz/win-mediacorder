@@ -8,10 +8,11 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
-            <!-- Farben der Timeline-Spuren (V1 = Hauptspur, V2 = Overlay-Spur). -->
-            <Color x:Key="TrackV1Color">#FF2F6FDE</Color>
-            <Color x:Key="TrackV2Color">#FF8B5CF6</Color>
-            <Color x:Key="PlayheadColor">#FFFF4D4F</Color>
+            <!-- Farben der Timeline-Spuren (V1 = Hauptspur, V2 = Overlay-Spur).
+                 Als SolidColorBrush statt <Color>, da der WinUI-3-XAML-Compiler <Color> hier nicht kennt. -->
+            <SolidColorBrush x:Key="TrackV1Color" Color="#FF2F6FDE" />
+            <SolidColorBrush x:Key="TrackV2Color" Color="#FF8B5CF6" />
+            <SolidColorBrush x:Key="PlayheadColor" Color="#FFFF4D4F" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>
