@@ -6,7 +6,7 @@
   IgnorableNamespaces="uap rescap">
 
   <!-- Für die Weitergabe Publisher an das eigene Signaturzertifikat anpassen. -->
-  <Identity Name="MediaRecorder.App" Publisher="CN=MediaRecorder Dev" Version="1.0.0.0" />
+  <Identity Name="MediaRecorder.App" Publisher="CN=MediaRecorder Dev" Version="1.52.0.0" />
 
   <Properties>
     <DisplayName>Media Recorder</DisplayName>

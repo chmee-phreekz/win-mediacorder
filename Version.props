@@ -1,11 +1,11 @@
 <Project>
   <!--
     Zentrale Versionsnummer der App, angezeigt in der Titelleiste (z.B. "Agora 1.51").
-    Hauptversion = Buchstabe mit Namen (A = Agora). Subversion: bei jedem Push um 0.01 erhöhen.
+    Hauptversion = Buchstabe mit Namen (A = Agora). Subversion: bei jedem Push um 0.01 erhöhen, ebenso Identity Version in src\MediaRecorder.App\Package.appxmanifest (1.52 -> 1.52.0.0).
   -->
   <PropertyGroup>
     <MrVersionLetter>A</MrVersionLetter>
     <MrVersionName>Agora</MrVersionName>
-    <MrSubVersion>1.51</MrSubVersion>
+    <MrSubVersion>1.52</MrSubVersion>
   </PropertyGroup>
 </Project>
