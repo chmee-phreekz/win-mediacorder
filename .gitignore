@@ -45,3 +45,8 @@ BundleArtifacts/
 *.tmp
 Thumbs.db
 .DS_Store
+
+# MSIX-Veröffentlichung
+AppPackages/
+certs/
+*.pfx

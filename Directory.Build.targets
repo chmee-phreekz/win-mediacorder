@@ -48,4 +48,19 @@
   <PropertyGroup>
     <AppxSymbolPackageEnabled>false</AppxSymbolPackageEnabled>
   </PropertyGroup>
+
+  <!--
+    Paketversion: Identity Version in Package.appxmanifest muss zur Subversion passen (1.52 -> 1.52.0.0),
+    sonst lässt sich ein neues MSIX nicht über ein installiertes Paket aktualisieren. Bei jedem Push mit erhöhen.
+  -->
+  <Target Name="MrCheckPackageVersion" BeforeTargets="BeforeBuild"
+          Condition="Exists('$(MSBuildProjectDirectory)\Package.appxmanifest') And '$(MrSubVersion)' != ''">
+    <XmlPeek XmlInputPath="$(MSBuildProjectDirectory)\Package.appxmanifest"
+             Query="/m:Package/m:Identity/@Version"
+             Namespaces="&lt;Namespace Prefix='m' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10' /&gt;">
+      <Output TaskParameter="Result" PropertyName="_MrManifestVersion" />
+    </XmlPeek>
+    <Warning Condition="'$(_MrManifestVersion)' != '$(MrSubVersion).0.0'"
+             Text="MediaRecorder: Package.appxmanifest hat Version $(_MrManifestVersion), erwartet $(MrSubVersion).0.0 (Version.props)." />
+  </Target>
 </Project>

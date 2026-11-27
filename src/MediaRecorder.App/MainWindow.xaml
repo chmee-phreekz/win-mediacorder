@@ -20,7 +20,9 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <FontIcon Glyph="&#xE714;" FontSize="14" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+            <!-- App-Logo, helle Variante für den dunklen Kopf (LogoDark.png für ein helles Design). -->
+            <Image Source="ms-appx:///Assets/LogoLight.png" Width="18" Height="18" VerticalAlignment="Center"
+                   AutomationProperties.Name="Media Recorder Logo" />
             <TextBlock x:Name="TitleText" Grid.Column="1" Text="Media Recorder" VerticalAlignment="Center"
                        Style="{StaticResource CaptionTextBlockStyle}" />
         </Grid>
