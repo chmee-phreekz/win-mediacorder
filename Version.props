@@ -6,6 +6,6 @@
   <PropertyGroup>
     <MrVersionLetter>A</MrVersionLetter>
     <MrVersionName>Agora</MrVersionName>
-    <MrSubVersion>1.52</MrSubVersion>
+    <MrSubVersion>1.53</MrSubVersion>
   </PropertyGroup>
 </Project>
