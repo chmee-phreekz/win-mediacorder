@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    Zentrale Versionsnummer der App, angezeigt in der Titelleiste (z.B. "Agora 1.50").
+    Hauptversion = Buchstabe mit Namen (A = Agora). Subversion: bei jedem Push um 0.01 erhöhen.
+  -->
+  <PropertyGroup>
+    <MrVersionLetter>A</MrVersionLetter>
+    <MrVersionName>Agora</MrVersionName>
+    <MrSubVersion>1.50</MrSubVersion>
+  </PropertyGroup>
+</Project>

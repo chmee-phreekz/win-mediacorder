@@ -20,6 +20,9 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
+        // Versionsnummer in der Titelleiste, zentral gepflegt in Version.props.
+        Title = $"Media Recorder · {Services.AppVersion.Display}";
+        TitleText.Text = Title;
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1600, 960));
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         AppWindow.Closing += OnClosing;

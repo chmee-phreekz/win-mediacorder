@@ -17,3 +17,8 @@ WinUI-3-Anwendung (C#, Dark Mode) zum Aufnehmen und einfachen Schneiden von Vide
 Windows 10/11, Visual Studio 2022 oder 2026 mit Workload „Windows-Anwendungsentwicklung“ und .NET 8 SDK. Der C++-Workload ist nicht nötig (siehe `Directory.Build.targets`). `MediaRecorder.sln` öffnen und `MediaRecorder.App` starten.
 
 Tests: `dotnet test tests/MediaRecorder.Core.Tests`
+
+## Version
+
+Zentral in `Version.props`: Hauptversion als Buchstabe mit Namen (A = Agora), Subversion bei jedem Push um 0.01 erhöhen.
+Angezeigt in der Titelleiste, z.B. „Media Recorder · Agora 1.50“.
