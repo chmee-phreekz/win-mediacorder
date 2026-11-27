@@ -39,14 +39,58 @@ public sealed class Timeline
 
     public bool IsAssetInUse(Guid id) => AllClips.Any(c => c.AssetId == id);
 
-    /// <summary>Entfernt ein Medium aus dem Pool; nur möglich, wenn es auf keiner Spur liegt (auch nicht im Undo-Verlauf).</summary>
-    public bool TryRemoveAsset(Guid id)
+    /// <summary>Anzahl der Clips auf der Timeline, die dieses Medium verwenden.</summary>
+    public int CountClipsUsing(Guid assetId) => AllClips.Count(c => c.AssetId == assetId);
+
+    /// <summary>
+    /// Entfernt ein Medium aus dem Pool. Clips, die es verwenden, verschwinden von der Timeline (als ein
+    /// rückgängig machbarer Schritt). Aus dem Undo/Redo-Verlauf werden seine Clips ebenfalls entfernt,
+    /// damit ein späteres Rückgängig nie auf eine nicht mehr vorhandene Datei zeigt. Liefert die Anzahl
+    /// der entfernten Timeline-Clips.
+    /// </summary>
+    public int RemoveAsset(Guid assetId)
     {
-        bool referenced = IsAssetInUse(id)
-            || _undo.Any(s => s.Any(t => t.Any(c => c.AssetId == id)))
-            || _redo.Any(s => s.Any(t => t.Any(c => c.AssetId == id)));
-        return !referenced && _assets.Remove(id);
+        if (!_assets.ContainsKey(assetId)) return 0;
+        int removed = CountClipsUsing(assetId);
+        if (removed > 0)
+            Mutate(() => { foreach (var t in _tracks) t.RemoveAll(c => c.AssetId == assetId); });
+
+        foreach (var state in _undo.Concat(_redo))
+            foreach (var t in state)
+                t.RemoveAll(c => c.AssetId == assetId);
+        // Leer gewordene Verlaufsschritte (die nur dieses Medium betrafen) zusammenfassen.
+        CompactHistory();
+
+        _assets.Remove(assetId);
+        if (removed == 0) RaiseChanged(); // Undo-Status kann sich geändert haben
+        return removed;
     }
+
+    private void CompactHistory()
+    {
+        var node = _undo.First;
+        while (node?.Next is { } next)
+        {
+            if (SameState(node.Value, next.Value)) _undo.Remove(next);
+            else node = next;
+        }
+        if (_undo.Last is { } last && SameState(last.Value, _tracks)) _undo.RemoveLast();
+
+        // Stack zählt von oben: zuerst der nächste Redo-Schritt, dann die weiter entfernten.
+        var redo = _redo.ToList();
+        var kept = new List<List<TimelineClip>[]>();
+        var prev = _tracks;
+        foreach (var r in redo)
+        {
+            if (!SameState(prev, r)) kept.Add(r);
+            prev = r;
+        }
+        _redo.Clear();
+        for (int i = kept.Count - 1; i >= 0; i--) _redo.Push(kept[i]);
+    }
+
+    private static bool SameState(List<TimelineClip>[] a, List<TimelineClip>[] b) =>
+        a.Length == b.Length && a.Zip(b).All(p => p.First.SequenceEqual(p.Second));
 
     // ---------- Abfragen ----------
 

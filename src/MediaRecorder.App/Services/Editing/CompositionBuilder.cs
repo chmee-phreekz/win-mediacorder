@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using MediaRecorder.Core.Editing;
 using Windows.Foundation;
@@ -13,18 +14,24 @@ namespace MediaRecorder.App.Services.Editing;
 /// dieselbe Medienbasis wie die Aufnahmeseite (MediaCapture).
 ///
 /// Abbildung:
-/// - V1 (Hauptspur) -> MediaComposition.Clips, Lücken als schwarze Farbclips.
-/// - V2 (Overlay)   -> eine MediaOverlayLayer, jedes Overlay seitenrichtig und größtmöglich im Ausgabebild (AspectFit).
+/// - Grundbild: ein schwarzes Standbild in exakt der Ausgabegröße über die ganze Länge.
+///   Damit ist das Koordinatensystem der Komposition immer genau die Ausgabegröße.
+/// - V1 und V2 -> je eine MediaOverlayLayer (V2 darüber). Jedes Overlay bekommt per AspectFit das größte
+///   unverzerrte Rechteck in diesem Koordinatensystem.
 /// - Reine Audiodateien (beide Spuren) -> BackgroundAudioTracks mit passender Verzögerung.
-/// Ragt V2 über das Ende von V1 hinaus, wird V1 mit Schwarz aufgefüllt, damit das Overlay sichtbar bleibt.
+///
+/// Warum nicht V1 direkt als MediaComposition.Clips: Die Komposition übernimmt dann Größe und
+/// Seitenverhältnis des ersten Clips als Bezugsraum für Overlay-Positionen. Bei Clips mit anderem Format
+/// als das Projekt (oder schwarzen Lückenclips ohne feste Größe) wurde V2 dadurch verzerrt dargestellt.
 /// </summary>
 public sealed class CompositionBuilder
 {
     private readonly Dictionary<Guid, StorageFile> _files = new();
     private readonly Dictionary<Guid, MediaClip> _videoClips = new();
     private readonly Dictionary<Guid, BackgroundAudioTrack> _audioTracks = new();
+    private readonly Dictionary<(int, int), StorageFile> _baseImages = new();
 
-    /// <param name="width">Ausgabebreite; Overlay-Positionen werden in diesem Pixelraum berechnet.</param>
+    /// <param name="width">Ausgabebreite; alle Positionen werden in diesem Pixelraum berechnet.</param>
     /// <param name="height">Ausgabehöhe.</param>
     public async Task<MediaComposition> BuildAsync(Timeline timeline, int width, int height)
     {
@@ -32,52 +39,52 @@ public sealed class CompositionBuilder
         var total = timeline.Duration;
         if (total <= TimeSpan.Zero) return composition;
 
-        // --- V1 ---
-        var cursor = TimeSpan.Zero;
-        foreach (var c in timeline.GetClips(Timeline.MainTrack))
+        composition.Clips.Add(await MediaClip.CreateFromImageFileAsync(await GetBaseImageAsync(width, height), total));
+
+        foreach (int track in new[] { Timeline.MainTrack, Timeline.OverlayTrack })
         {
-            var asset = timeline.GetAsset(c.AssetId);
-            AddGap(composition, c.Start - cursor);
+            var layer = new MediaOverlayLayer();
+            foreach (var c in timeline.GetClips(track))
+            {
+                var asset = timeline.GetAsset(c.AssetId);
+                if (asset.Kind == MediaKind.Audio)
+                {
+                    composition.BackgroundAudioTracks.Add(await CreateAudioAsync(asset, c));
+                    continue;
+                }
 
-            if (asset.Kind == MediaKind.Audio)
-            {
-                // Audio auf V1: Bild bleibt schwarz, Ton läuft als Hintergrundspur.
-                AddGap(composition, c.Duration);
-                composition.BackgroundAudioTracks.Add(await CreateAudioAsync(asset, c));
+                var r = Geometry.AspectFitPixels(asset.Width, asset.Height, width, height);
+                layer.Overlays.Add(new MediaOverlay(await CreateVideoClipAsync(asset, c))
+                {
+                    Position = new Rect(r.X, r.Y, r.Width, r.Height),
+                    Delay = c.Start,
+                    Opacity = 1.0,
+                    AudioEnabled = asset.HasAudio && !c.AudioMuted,
+                });
             }
-            else
-            {
-                composition.Clips.Add(await CreateVideoClipAsync(asset, c));
-            }
-            cursor = c.End;
+            if (layer.Overlays.Count > 0)
+                composition.OverlayLayers.Add(layer);
         }
-        AddGap(composition, total - cursor);
-
-        // --- V2 ---
-        var layer = new MediaOverlayLayer();
-        foreach (var c in timeline.GetClips(Timeline.OverlayTrack))
-        {
-            var asset = timeline.GetAsset(c.AssetId);
-            if (asset.Kind == MediaKind.Audio)
-            {
-                composition.BackgroundAudioTracks.Add(await CreateAudioAsync(asset, c));
-                continue;
-            }
-
-            var r = Geometry.AspectFitPixels(asset.Width, asset.Height, width, height);
-            var overlay = new MediaOverlay(await CreateVideoClipAsync(asset, c))
-            {
-                Position = new Rect(r.X, r.Y, r.Width, r.Height),
-                Delay = c.Start,
-                Opacity = 1.0,
-                AudioEnabled = asset.HasAudio && !c.AudioMuted,
-            };
-            layer.Overlays.Add(overlay);
-        }
-        if (layer.Overlays.Count > 0)
-            composition.OverlayLayers.Add(layer);
 
         return composition;
+    }
+
+    /// <summary>Schwarzes PNG in Ausgabegröße, einmal pro Größe im Temp-Ordner erzeugt.</summary>
+    private async Task<StorageFile> GetBaseImageAsync(int width, int height)
+    {
+        if (_baseImages.TryGetValue((width, height), out var cached)) return cached;
+        var dir = Path.Combine(Path.GetTempPath(), "MediaRecorder");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, $"base_{width}x{height}.png");
+        if (!File.Exists(path))
+        {
+            var tmp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            await File.WriteAllBytesAsync(tmp, SolidPng.Create(width, height));
+            File.Move(tmp, path, overwrite: true);
+        }
+        var file = await StorageFile.GetFileFromPathAsync(path);
+        _baseImages[(width, height)] = file;
+        return file;
     }
 
     /// <summary>Gibt zwischengespeicherte Dateien/Clips frei, z. B. nachdem ein Medium aus dem Pool entfernt wurde.</summary>
@@ -86,12 +93,6 @@ public sealed class CompositionBuilder
         _files.Remove(assetId);
         _videoClips.Remove(assetId);
         _audioTracks.Remove(assetId);
-    }
-
-    private static void AddGap(MediaComposition composition, TimeSpan duration)
-    {
-        if (duration >= TimeSpan.FromMilliseconds(1))
-            composition.Clips.Add(MediaClip.CreateFromColor(Microsoft.UI.Colors.Black, duration));
     }
 
     private async Task<MediaClip> CreateVideoClipAsync(MediaAsset asset, TimelineClip c)
