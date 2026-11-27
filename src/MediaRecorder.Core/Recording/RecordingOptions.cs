@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using MediaRecorder.Core.Audio;
 using MediaRecorder.Core.Encoding;
+using MediaRecorder.Core.Video;
 
 namespace MediaRecorder.Core.Recording;
 
@@ -29,6 +30,9 @@ public sealed class RecordingOptions
 
     /// <summary>Kompressor für den Audioeingang (wirkt auf Aufnahme und VU-Meter).</summary>
     public CompressorSettings Compressor { get; set; } = new();
+
+    /// <summary>LUT für das Videosignal (wirkt auf Aufnahme und Vorschau).</summary>
+    public LutSettings Lut { get; set; } = new();
 
     public string OutputFolder { get; set; } =
         Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);

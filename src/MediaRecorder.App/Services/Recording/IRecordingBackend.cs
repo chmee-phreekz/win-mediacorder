@@ -5,6 +5,8 @@ using MediaRecorder.Core.Audio;
 using MediaRecorder.Core.Devices;
 using MediaRecorder.Core.Encoding;
 using MediaRecorder.Core.Recording;
+using MediaRecorder.Core.Video;
+using Windows.Graphics.Imaging;
 using Windows.Media.Playback;
 
 namespace MediaRecorder.App.Services.Recording;
@@ -45,6 +47,23 @@ public interface IRecordingBackend : IAsyncDisposable
 
     /// <summary>Grund, falls der Effekt nicht eingebunden werden konnte.</summary>
     string? CompressorError { get; }
+
+    /// <summary>
+    /// LUT setzen (lädt die .cube-Datei, wirft bei ungültiger Datei). Wirkt sofort auf Vorschau und,
+    /// wenn der Effekt eingebunden ist, auf die Aufnahme.
+    /// </summary>
+    Task SetLutAsync(LutSettings settings);
+
+    /// <summary>True, wenn der LUT-Effekt im Aufnahmepfad eingebunden ist.</summary>
+    bool IsLutEffectActive { get; }
+    string? LutEffectError { get; }
+
+    /// <summary>True, solange die Vorschau über die LUT-Bildausgabe statt über den MediaPlayer läuft.</summary>
+    bool IsLutPreviewActive { get; }
+    event EventHandler<bool>? LutPreviewActiveChanged;
+
+    /// <summary>LUT-Vorschaubild (Hintergrund-Thread); der Empfänger gibt das Bitmap frei.</summary>
+    event EventHandler<SoftwareBitmap>? LutPreviewFrame;
 
     Task StartRecordingAsync(string filePath, EncodingSettings settings);
     Task PauseAsync();

@@ -60,7 +60,11 @@
                 <MediaPlayerElement x:Name="Preview"
                                     Stretch="Uniform"
                                     AreTransportControlsEnabled="False"
-                                    AutoPlay="True" />
+                                    AutoPlay="True"
+                                    Visibility="{x:Bind InvertVisibility(ViewModel.IsLutPreviewActive), Mode=OneWay}" />
+                <!-- Vorschau mit LUT (eigene Bildausgabe, gleiches Seitenverhältnis) -->
+                <Image x:Name="LutPreviewImage" Stretch="Uniform"
+                       Visibility="{x:Bind ViewModel.IsLutPreviewActive, Mode=OneWay}" />
                 <TextBlock Text="Keine Vorschau"
                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -131,6 +135,34 @@
 
             </StackPanel>
             </ContentControl>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel Spacing="10">
+                        <Grid>
+                            <TextBlock Text="LUT" Style="{StaticResource SectionHeader}" VerticalAlignment="Center" Margin="0" />
+                            <ToggleSwitch HorizontalAlignment="Right" MinWidth="0" OnContent="" OffContent=""
+                                          IsEnabled="{x:Bind ViewModel.HasLut, Mode=OneWay}"
+                                          IsOn="{x:Bind ViewModel.LutEnabled, Mode=TwoWay}" />
+                        </Grid>
+                        <TextBlock Text="{x:Bind ViewModel.LutName, Mode=OneWay}" TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   ToolTipService.ToolTip="{x:Bind ViewModel.LutPath, Mode=OneWay}" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content=".cube-Datei wählen…" Click="PickLut_Click" />
+                            <Button Content="Entfernen" Command="{x:Bind ViewModel.ClearLutCommand}"
+                                    IsEnabled="{x:Bind ViewModel.HasLut, Mode=OneWay}" />
+                        </StackPanel>
+                        <InfoBar Severity="Warning" IsClosable="False"
+                                 IsOpen="{x:Bind ViewModel.LutWarning, Mode=OneWay, Converter={StaticResource RecordNotNullToBool}}"
+                                 Message="{x:Bind ViewModel.LutWarning, Mode=OneWay}">
+                            <InfoBar.ActionButton>
+                                <Button Content="Jetzt registrieren (Adminrechte)"
+                                        Visibility="{x:Bind ViewModel.CanRegisterLut, Mode=OneWay}"
+                                        Command="{x:Bind ViewModel.RegisterCompressorCommand}" />
+                            </InfoBar.ActionButton>
+                        </InfoBar>
+                    </StackPanel>
+                </Border>
+
                 <Border Style="{StaticResource Card}">
                     <StackPanel Spacing="10">
                         <Grid>

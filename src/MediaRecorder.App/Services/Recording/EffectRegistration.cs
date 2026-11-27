@@ -8,7 +8,7 @@ using Microsoft.Win32;
 namespace MediaRecorder.App.Services.Recording;
 
 /// <summary>
-/// Registriert den Kompressor-Effekt als Windows-Runtime-Klasse in HKLM.
+/// Registriert die Effekte (Kompressor, LUT) als Windows-Runtime-Klassen in HKLM.
 ///
 /// Hintergrund: Media Foundation (MediaCapture.AddAudioEffectAsync) liest die Registrierung eines Effekts
 /// direkt aus der Registry. Die registrierungsfreie Variante über app.manifest reicht dafür nicht
@@ -22,20 +22,31 @@ namespace MediaRecorder.App.Services.Recording;
 /// </summary>
 public static class EffectRegistration
 {
-    public const string ClassId = "MediaRecorder.Effects.CompressorEffect";
+    public const string CompressorClassId = "MediaRecorder.Effects.CompressorEffect";
+    public const string LutClassId = "MediaRecorder.Effects.LutEffect";
+
+    /// <summary>Alle Effekt-Klassen, die gemeinsam registriert werden.</summary>
+    public static readonly string[] ClassIds = [CompressorClassId, LutClassId];
     public const string RegisterArgument = "--register-effect";
     public const string UnregisterArgument = "--unregister-effect";
 
-    private const string KeyPath = @"SOFTWARE\Microsoft\WindowsRuntime\ActivatableClassId\" + ClassId;
+    private const string KeyRoot = @"SOFTWARE\Microsoft\WindowsRuntime\ActivatableClassId\";
 
     public static string HostPath => Path.Combine(AppContext.BaseDirectory, "WinRT.Host.dll");
 
-    /// <summary>True, wenn die Registrierung auf genau diesen Programmordner zeigt.</summary>
+    /// <summary>True, wenn alle Effekte auf genau diesen Programmordner registriert sind.</summary>
     public static bool IsRegisteredForThisInstall()
+    {
+        foreach (var id in ClassIds)
+            if (!IsRegistered(id)) return false;
+        return true;
+    }
+
+    private static bool IsRegistered(string classId)
     {
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(KeyPath);
+            using var key = Registry.LocalMachine.OpenSubKey(KeyRoot + classId);
             return key?.GetValue("DllPath") is string path
                 && string.Equals(Path.GetFullPath(path), Path.GetFullPath(HostPath), StringComparison.OrdinalIgnoreCase);
         }
@@ -94,8 +105,9 @@ public static class EffectRegistration
         {
             if (args[i] == UnregisterArgument)
             {
-                Registry.LocalMachine.DeleteSubKeyTree(KeyPath, throwOnMissingSubKey: false);
-                ErrorReporter.Log(null, "Kompressor-Effekt deregistriert");
+                foreach (var id in ClassIds)
+                    Registry.LocalMachine.DeleteSubKeyTree(KeyRoot + id, throwOnMissingSubKey: false);
+                ErrorReporter.Log(null, "Effekte deregistriert");
                 return 0;
             }
 
@@ -108,12 +120,15 @@ public static class EffectRegistration
                 return 2;
             }
 
-            using var key = Registry.LocalMachine.CreateSubKey(KeyPath, writable: true);
-            key.SetValue("ActivationType", 0, RegistryValueKind.DWord); // 0 = InProcess
-            key.SetValue("DllPath", hostPath, RegistryValueKind.String);
-            key.SetValue("Threading", 0, RegistryValueKind.DWord);      // 0 = Both
-            key.SetValue("TrustLevel", 0, RegistryValueKind.DWord);     // 0 = BaseTrust
-            ErrorReporter.Log(null, $"Kompressor-Effekt registriert: {hostPath}");
+            foreach (var id in ClassIds)
+            {
+                using var key = Registry.LocalMachine.CreateSubKey(KeyRoot + id, writable: true);
+                key.SetValue("ActivationType", 0, RegistryValueKind.DWord); // 0 = InProcess
+                key.SetValue("DllPath", hostPath, RegistryValueKind.String);
+                key.SetValue("Threading", 0, RegistryValueKind.DWord);      // 0 = Both
+                key.SetValue("TrustLevel", 0, RegistryValueKind.DWord);     // 0 = BaseTrust
+            }
+            ErrorReporter.Log(null, $"Effekte registriert: {hostPath}");
             return 0;
         }
         catch (Exception ex)
