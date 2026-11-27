@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using MediaRecorder.Core.Devices;
 using MediaRecorder.Core.Encoding;
 using MediaRecorder.Core.Recording;
+using MediaRecorder.App.Services;
 using Windows.Media.Capture;
 using Windows.Media.Capture.Frames;
 using Windows.Media.Core;
@@ -33,6 +34,7 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
     private MediaCapture? _capture;
     private MediaFrameSource? _previewSource;
     private MediaPlayer? _previewPlayer;
+    private MediaSource? _previewMediaSource;
     private LowLagMediaRecording? _recording;
     private string? _currentFile;
     private Timer? _diskTimer;
@@ -197,29 +199,31 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
         if (_previewSource is null)
             throw new InvalidOperationException("Das Gerät liefert keinen Farbvideostream.");
 
-        _previewPlayer = new MediaPlayer
+        // Ein einziger MediaPlayer für die ganze Lebensdauer: das MediaPlayerElement in der UI hält ihn fest.
+        // Würde er beim Gerätewechsel verworfen, während die UI ihn noch anzeigt, stürzt die App nativ ab
+        // (0xC000027B, nicht per try/catch abfangbar). Deshalb wird nur die Quelle getauscht.
+        _previewPlayer ??= new MediaPlayer
         {
             RealTimePlayback = true,
             AutoPlay = true,
             IsMuted = true, // Kein Audio-Monitoring über Lautsprecher (Rückkopplung).
-            Source = MediaSource.CreateFromMediaFrameSource(_previewSource),
         };
+        _previewMediaSource = MediaSource.CreateFromMediaFrameSource(_previewSource);
+        _previewPlayer.Source = _previewMediaSource;
         _previewPlayer.Play();
         return Task.CompletedTask;
     }
 
+    /// <summary>Löst die Vorschau vom Gerät, bevor MediaCapture freigegeben wird. Der MediaPlayer selbst bleibt bestehen.</summary>
     private void StopPreview()
     {
-        if (_previewPlayer is null) return;
-        try
+        if (_previewPlayer is not null)
         {
-            _previewPlayer.Pause();
-            (_previewPlayer.Source as IDisposable)?.Dispose();
-            _previewPlayer.Source = null;
-            _previewPlayer.Dispose();
+            try { _previewPlayer.Pause(); } catch { }
+            try { _previewPlayer.Source = null; } catch { }
         }
-        catch { /* Gerät evtl. schon weg */ }
-        _previewPlayer = null;
+        try { _previewMediaSource?.Dispose(); } catch { }
+        _previewMediaSource = null;
         _previewSource = null;
     }
 
@@ -349,6 +353,12 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
 
     private async Task CheckDiskAsync(string dir)
     {
+        try { await CheckDiskCoreAsync(dir); }
+        catch (Exception ex) { ErrorReporter.Log(ex, "Speicherprüfung"); }
+    }
+
+    private async Task CheckDiskCoreAsync(string dir)
+    {
         var free = FreeMb(dir);
         if (free is null || free >= MinimumFreeSpaceMb / 2 /* während der Aufnahme: halbe Schwelle */) return;
         if (_recording is null) return;
@@ -424,6 +434,7 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
 
     private async void OnCaptureFailed(MediaCapture sender, MediaCaptureFailedEventArgs e)
     {
+        ErrorReporter.Log(null, $"MediaCapture.Failed 0x{e.Code:X8}: {e.Message}");
         string? saved = null;
         await _gate.WaitAsync();
         try
@@ -446,9 +457,16 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
 
     private async void OnRecordLimitationExceeded(MediaCapture sender)
     {
-        var path = await StopRecordingAsync();
-        Faulted?.Invoke(this, new RecordingFault(
-            "Windows hat die maximale Aufnahmedauer erreicht. Die Datei wurde gesichert.", null, path));
+        try
+        {
+            var path = await StopRecordingAsync();
+            Faulted?.Invoke(this, new RecordingFault(
+                "Windows hat die maximale Aufnahmedauer erreicht. Die Datei wurde gesichert.", null, path));
+        }
+        catch (Exception ex)
+        {
+            ErrorReporter.Log(ex, "RecordLimitationExceeded");
+        }
     }
 
     // ---------------------------------------------------------------- Aufräumen
@@ -476,6 +494,9 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
             await StopInternalAsync(finalizeOnly: true);
             await ReleaseCaptureAsync();
             SetState(RecordingState.Idle);
+            // Erst jetzt (App wird beendet) den MediaPlayer selbst freigeben.
+            try { _previewPlayer?.Dispose(); } catch { }
+            _previewPlayer = null;
         }
         finally { _gate.Release(); }
     }

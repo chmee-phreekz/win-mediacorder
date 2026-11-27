@@ -16,6 +16,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <EnableMsixTooling>true</EnableMsixTooling>
+    <!-- Für den direkten Zugriff auf Audiopuffer (VU-Meter, IMemoryBufferByteAccess). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

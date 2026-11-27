@@ -11,16 +11,14 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
-        UnhandledException += (_, e) =>
-        {
-            // Robustheit: unbehandelte UI-Fehler protokollieren statt die App (und eine laufende Aufnahme) abzuschießen.
-            System.Diagnostics.Debug.WriteLine($"Unbehandelter Fehler: {e.Exception}");
-            e.Handled = true;
-        };
+        // Robustheit: unbehandelte Fehler protokollieren und anzeigen, statt die App (und eine laufende Aufnahme) abzuschießen.
+        Services.ErrorReporter.RegisterGlobalHandlers(this);
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        Services.ErrorReporter.Initialize(Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread());
+        Services.ErrorReporter.Log(null, "App gestartet");
         MainWindow = new MainWindow();
         MainWindow.Activate();
     }

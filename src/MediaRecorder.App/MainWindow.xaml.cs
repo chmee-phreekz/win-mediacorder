@@ -29,8 +29,16 @@ public sealed partial class MainWindow : Window
 
     private void Nav_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
-        ContentFrame.Content = tag == "edit" ? _editPage : _recordPage;
+        try
+        {
+            var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
+            Services.ErrorReporter.Log(null, $"Seitenwechsel: {tag}");
+            ContentFrame.Content = tag == "edit" ? _editPage : _recordPage;
+        }
+        catch (Exception ex)
+        {
+            Services.ErrorReporter.Report(ex, "Seitenwechsel");
+        }
     }
 
     private async void OnClosing(AppWindow sender, AppWindowClosingEventArgs args)
