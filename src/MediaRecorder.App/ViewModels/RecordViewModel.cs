@@ -117,6 +117,37 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
     [ObservableProperty] private double _compressorGainDb;
     [ObservableProperty] private string _gainReductionText = "";
     [ObservableProperty] private string? _compressorWarning;
+    /// <summary>Button „Jetzt registrieren“ zeigen (Effekt nicht registriert, Registrierung möglich).</summary>
+    [ObservableProperty] private bool _canRegisterCompressor;
+    [ObservableProperty] private bool _isRegisteringCompressor;
+
+    [RelayCommand]
+    private async Task RegisterCompressorAsync()
+    {
+        if (IsRegisteringCompressor) return;
+        IsRegisteringCompressor = true;
+        try
+        {
+            var error = await EffectRegistration.RequestRegistrationAsync();
+            if (error is not null)
+            {
+                ShowError(error);
+                return;
+            }
+            InfoMessage = "Kompressor registriert. Er wirkt ab jetzt auch auf die Aufnahme.";
+            if (!IsRecording) await OpenDevicesAsync(); // Effekt neu einbinden
+            else ShowError("Der Kompressor wird nach dem Ende der laufenden Aufnahme eingebunden.");
+        }
+        catch (Exception ex)
+        {
+            ErrorReporter.Report(ex, "Kompressor registrieren");
+        }
+        finally
+        {
+            IsRegisteringCompressor = false;
+            UpdateCompressorWarning();
+        }
+    }
 
     public double CompressorMinThreshold => CompressorSettings.MinThresholdDb;
     public double CompressorMaxThreshold => CompressorSettings.MaxThresholdDb;
@@ -164,10 +195,16 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
     private void UpdateCompressorWarning()
     {
         bool hasAudio = !string.IsNullOrEmpty(SelectedAudioDevice?.Id);
-        CompressorWarning = CompressorEnabled && hasAudio && !_backend.IsCompressorActive && _backend.CompressorError is not null
+        bool notActive = CompressorEnabled && hasAudio && !_backend.IsCompressorActive && _backend.CompressorError is not null;
+        bool registered = EffectRegistration.IsRegisteredForThisInstall();
+        CanRegisterCompressor = notActive && !registered;
+
+        if (!notActive) { CompressorWarning = null; return; }
+        CompressorWarning = registered
             ? "Der Kompressor konnte nicht in die Aufnahme eingebunden werden. Das VU-Meter zeigt das komprimierte Signal, " +
               $"die Datei wird aber unkomprimiert aufgenommen. ({_backend.CompressorError})"
-            : null;
+            : "Der Kompressor muss einmalig in Windows registriert werden (Adminrechte), damit er auch auf die Aufnahme wirkt. " +
+              "Bis dahin zeigt nur das VU-Meter das komprimierte Signal.";
     }
 
     private void LoadCompressor(CompressorSettings c)

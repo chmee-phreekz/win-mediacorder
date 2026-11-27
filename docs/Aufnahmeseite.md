@@ -50,3 +50,7 @@ Windows-Einstellungen > Datenschutz > Kamera und Mikrofon: Zugriff für Desktop-
 - Das VU-Meter rechnet denselben Kompressor mit denselben Einstellungen und zeigt so sofort das komprimierte Signal
   sowie die aktuelle Pegelreduktion.
 - Lässt sich der Effekt nicht einbinden, erscheint eine Warnung; die Aufnahme läuft dann unkomprimiert weiter.
+- **Registrierung (unpackaged):** Media Foundation findet den Effekt nur über HKLM\SOFTWARE\Microsoft\WindowsRuntime\ActivatableClassId.
+  Ist er nicht registriert, zeigt die Kompressor-Karte „Jetzt registrieren (Adminrechte)“. Die App startet sich dann einmal mit
+  UAC-Abfrage (`MediaRecorder.exe --register-effect`), schreibt den Eintrag (zeigt auf WinRT.Host.dll im Programmordner) und
+  bindet den Effekt neu ein. Nach Verschieben der App (z.B. Debug ↔ Release) erneut registrieren. Entfernen: `MediaRecorder.exe --unregister-effect` als Admin.

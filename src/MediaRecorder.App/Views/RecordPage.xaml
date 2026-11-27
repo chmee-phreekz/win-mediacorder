@@ -166,7 +166,13 @@
                         </StackPanel>
                         <InfoBar Severity="Warning" IsClosable="False"
                                  IsOpen="{x:Bind ViewModel.CompressorWarning, Mode=OneWay, Converter={StaticResource RecordNotNullToBool}}"
-                                 Message="{x:Bind ViewModel.CompressorWarning, Mode=OneWay}" />
+                                 Message="{x:Bind ViewModel.CompressorWarning, Mode=OneWay}">
+                            <InfoBar.ActionButton>
+                                <Button Content="Jetzt registrieren (Adminrechte)"
+                                        Visibility="{x:Bind ViewModel.CanRegisterCompressor, Mode=OneWay}"
+                                        Command="{x:Bind ViewModel.RegisterCompressorCommand}" />
+                            </InfoBar.ActionButton>
+                        </InfoBar>
                     </StackPanel>
                 </Border>
 

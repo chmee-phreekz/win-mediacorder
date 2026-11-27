@@ -19,6 +19,14 @@ public partial class App : Application
     {
         Services.ErrorReporter.Initialize(Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread());
         Services.ErrorReporter.Log(null, "App gestartet");
+
+        // Zweite, elevierte Instanz nur zum Registrieren des Kompressor-Effekts: kein Fenster, sofort beenden.
+        if (Services.Recording.EffectRegistration.HandleCommandLine(Environment.GetCommandLineArgs()) is int exitCode)
+        {
+            Environment.Exit(exitCode);
+            return;
+        }
+
         MainWindow = new MainWindow();
         MainWindow.Activate();
     }
