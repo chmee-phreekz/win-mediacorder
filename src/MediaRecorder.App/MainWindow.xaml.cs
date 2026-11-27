@@ -42,6 +42,7 @@ public sealed partial class MainWindow : Window
             _recordPage.Visibility = edit ? Visibility.Collapsed : Visibility.Visible;
             _editPage.Visibility = edit ? Visibility.Visible : Visibility.Collapsed;
             _recordPage.SetActive(!edit);
+            _editPage.SetActive(edit);
         }
         catch (Exception ex)
         {

@@ -364,6 +364,8 @@ public sealed partial class EditViewModel : ObservableObject, IAsyncDisposable
     [RelayCommand] private void GoToStart() => Seek(TimeSpan.Zero);
     [RelayCommand] private void GoToEnd() => Seek(Timeline.Duration);
 
+    public void PausePlayback() => _preview.Pause();
+
     public void Seek(TimeSpan t)
     {
         if (t < TimeSpan.Zero) t = TimeSpan.Zero;
