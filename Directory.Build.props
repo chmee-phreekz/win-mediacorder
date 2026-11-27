@@ -1,0 +1,12 @@
+<Project>
+  <!-- Versionsnummer aus Version.props in alle Assemblies schreiben (gelesen von MediaRecorder.App.Services.AppVersion). -->
+  <Import Project="$(MSBuildThisFileDirectory)Version.props" />
+  <PropertyGroup>
+    <InformationalVersion>$(MrVersionName) $(MrSubVersion)</InformationalVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="MrVersionLetter" Value="$(MrVersionLetter)" />
+    <AssemblyMetadata Include="MrVersionName" Value="$(MrVersionName)" />
+    <AssemblyMetadata Include="MrSubVersion" Value="$(MrSubVersion)" />
+  </ItemGroup>
+</Project>

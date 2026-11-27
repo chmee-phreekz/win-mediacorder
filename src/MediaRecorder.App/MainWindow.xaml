@@ -21,7 +21,7 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <FontIcon Glyph="&#xE714;" FontSize="14" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-            <TextBlock Grid.Column="1" Text="Media Recorder" VerticalAlignment="Center"
+            <TextBlock x:Name="TitleText" Grid.Column="1" Text="Media Recorder" VerticalAlignment="Center"
                        Style="{StaticResource CaptionTextBlockStyle}" />
         </Grid>
 
