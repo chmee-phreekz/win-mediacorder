@@ -24,9 +24,15 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         AppWindow.Closing += OnClosing;
 
+        // Beide Seiten liegen dauerhaft im Fenster und werden nur ein- und ausgeblendet.
+        // Ein MediaPlayerElement, das aus dem visuellen Baum genommen und wieder eingehängt wird
+        // (Frame.Content-Wechsel), führt in WinUI 3 zu nativen Abstürzen (0xC000027B).
+        // Das Grid entsteht hier im Code, damit es nicht vom generierten XAML-Code abhängt.
         _editPage.Visibility = Visibility.Collapsed;
-        PageHost.Children.Add(_recordPage);
-        PageHost.Children.Add(_editPage);
+        var pageHost = new Grid();
+        pageHost.Children.Add(_recordPage);
+        pageHost.Children.Add(_editPage);
+        Nav.Content = pageHost;
 
         Nav.SelectedItem = Nav.MenuItems.OfType<NavigationViewItem>().First();
     }
