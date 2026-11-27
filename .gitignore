@@ -1,0 +1,47 @@
+# Build-Ausgaben
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+ARM64/
+[Ll]og/
+*.binlog
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+
+# Tests
+TestResults/
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+
+# MSIX / WinUI
+AppPackages/
+BundleArtifacts/
+*.appx
+*.msix
+*.msixbundle
+*.pfx
+
+# Sonstiges
+*.log
+*.tmp
+Thumbs.db
+.DS_Store

@@ -1,0 +1,43 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{3544BB36-1BA5-460A-84DB-24F33B27FD40}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaRecorder.Core", "src\MediaRecorder.Core\MediaRecorder.Core.csproj", "{0489705A-C9B8-43A4-9985-DC2A4E2E9536}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaRecorder.App", "src\MediaRecorder.App\MediaRecorder.App.csproj", "{94F15DAD-C887-482F-A7DD-1CF654E7D1B9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{63373B16-1CFC-455B-8D83-2D92CF02564A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MediaRecorder.Core.Tests", "tests\MediaRecorder.Core.Tests\MediaRecorder.Core.Tests.csproj", "{62C3E035-524E-41BD-8416-520F347A6377}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0489705A-C9B8-43A4-9985-DC2A4E2E9536}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0489705A-C9B8-43A4-9985-DC2A4E2E9536}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0489705A-C9B8-43A4-9985-DC2A4E2E9536}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0489705A-C9B8-43A4-9985-DC2A4E2E9536}.Release|Any CPU.Build.0 = Release|Any CPU
+		{94F15DAD-C887-482F-A7DD-1CF654E7D1B9}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{94F15DAD-C887-482F-A7DD-1CF654E7D1B9}.Debug|Any CPU.Build.0 = Debug|x64
+		{94F15DAD-C887-482F-A7DD-1CF654E7D1B9}.Release|Any CPU.ActiveCfg = Release|x64
+		{94F15DAD-C887-482F-A7DD-1CF654E7D1B9}.Release|Any CPU.Build.0 = Release|x64
+		{62C3E035-524E-41BD-8416-520F347A6377}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{62C3E035-524E-41BD-8416-520F347A6377}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{62C3E035-524E-41BD-8416-520F347A6377}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{62C3E035-524E-41BD-8416-520F347A6377}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{0489705A-C9B8-43A4-9985-DC2A4E2E9536} = {3544BB36-1BA5-460A-84DB-24F33B27FD40}
+		{94F15DAD-C887-482F-A7DD-1CF654E7D1B9} = {3544BB36-1BA5-460A-84DB-24F33B27FD40}
+		{62C3E035-524E-41BD-8416-520F347A6377} = {63373B16-1CFC-455B-8D83-2D92CF02564A}
+	EndGlobalSection
+EndGlobal
