@@ -107,6 +107,9 @@ public sealed partial class RecordPage : Page
             ViewModel.SetOutputFolder(folder.Path);
     }
 
+    /// <summary>x:Bind-Funktion: Regler gedimmt anzeigen, wenn der Kompressor aus ist.</summary>
+    public double CompressorOpacity(bool enabled) => enabled ? 1.0 : 0.5;
+
     private void ErrorBar_Closed(InfoBar sender, object args) => ViewModel.ErrorMessage = null;
     private void InfoBar_Closed(InfoBar sender, object args) => ViewModel.InfoMessage = null;
 

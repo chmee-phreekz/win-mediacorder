@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using MediaRecorder.Core.Audio;
 using MediaRecorder.Core.Devices;
 using MediaRecorder.Core.Encoding;
 using MediaRecorder.Core.Recording;
@@ -35,6 +36,15 @@ public interface IRecordingBackend : IAsyncDisposable
 
     /// <summary>Prüft, ob dieses System die gewählten Codecs schreiben kann. Null = ok, sonst Begründung.</summary>
     Task<string?> CheckSupportAsync(EncodingSettings settings);
+
+    /// <summary>Kompressor-Einstellungen; wirken sofort, auch während der Aufnahme.</summary>
+    void SetCompressor(CompressorSettings settings);
+
+    /// <summary>True, wenn der Kompressor-Effekt im Aufnahmepfad eingebunden ist.</summary>
+    bool IsCompressorActive { get; }
+
+    /// <summary>Grund, falls der Effekt nicht eingebunden werden konnte.</summary>
+    string? CompressorError { get; }
 
     Task StartRecordingAsync(string filePath, EncodingSettings settings);
     Task PauseAsync();

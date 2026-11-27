@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MediaRecorder.App.Services;
 using MediaRecorder.App.Services.Recording;
+using MediaRecorder.Core.Audio;
 using MediaRecorder.Core.Devices;
 using MediaRecorder.Core.Encoding;
 using MediaRecorder.Core.Recording;
@@ -41,6 +42,7 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
         _outputFolder = _options.OutputFolder;
         _fileNamePattern = _options.FileNamePattern;
         LoadEncoding(_options.Encoding);
+        LoadCompressor(_options.Compressor);
         UpdateCodecLists();
 
         // Alle Ereignisse kommen aus Hintergrund-Threads: immer auf den UI-Thread wechseln und Fehler abfangen.
@@ -54,7 +56,11 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
             _ui.TryEnqueue(() =>
             {
                 System.Threading.Interlocked.Exchange(ref _levelsPending, 0);
-                try { AudioLevelsChanged?.Invoke(this, _latestLevels); }
+                try
+                {
+                    AudioLevelsChanged?.Invoke(this, _latestLevels);
+                    GainReductionText = CompressorEnabled ? $"Reduktion {_latestLevels.GainReductionDb:0.0} dB" : "";
+                }
                 catch (Exception ex) { ErrorReporter.Log(ex, "VU-Meter"); }
             });
         };
@@ -100,6 +106,79 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
             IsAudioMeterVisible = false;
             ErrorReporter.Log(ex, "Pegelanzeige starten");
         }
+    }
+
+    // ------------------------------------------------------------ Kompressor
+    // Attack, Release und Knie sind nur im Code einstellbar: MediaRecorder.Core.Audio.Compressor (Konstanten).
+
+    [ObservableProperty] private bool _compressorEnabled;
+    [ObservableProperty] private double _compressorThresholdDb = -18;
+    [ObservableProperty] private double _compressorRatio = 3;
+    [ObservableProperty] private double _compressorGainDb;
+    [ObservableProperty] private string _gainReductionText = "";
+    [ObservableProperty] private string? _compressorWarning;
+
+    public double CompressorMinThreshold => CompressorSettings.MinThresholdDb;
+    public double CompressorMaxThreshold => CompressorSettings.MaxThresholdDb;
+    public double CompressorMinRatio => CompressorSettings.MinRatio;
+    public double CompressorMaxRatio => CompressorSettings.MaxRatio;
+    public double CompressorMinGain => CompressorSettings.MinGainDb;
+    public double CompressorMaxGain => CompressorSettings.MaxGainDb;
+
+    public string ThresholdText => $"{CompressorThresholdDb:0.0} dB";
+    public string RatioText => $"{CompressorRatio:0.0} : 1";
+    public string GainText => $"{(CompressorGainDb >= 0 ? "+" : "")}{CompressorGainDb:0.0} dB";
+
+    partial void OnCompressorEnabledChanged(bool value) => ApplyCompressor();
+    partial void OnCompressorThresholdDbChanged(double value) { OnPropertyChanged(nameof(ThresholdText)); ApplyCompressor(); }
+    partial void OnCompressorRatioChanged(double value) { OnPropertyChanged(nameof(RatioText)); ApplyCompressor(); }
+    partial void OnCompressorGainDbChanged(double value) { OnPropertyChanged(nameof(GainText)); ApplyCompressor(); }
+
+    private CompressorSettings BuildCompressorSettings() => new CompressorSettings
+    {
+        Enabled = CompressorEnabled,
+        ThresholdDb = double.IsNaN(CompressorThresholdDb) ? -18 : CompressorThresholdDb,
+        Ratio = double.IsNaN(CompressorRatio) ? 3 : CompressorRatio,
+        GainDb = double.IsNaN(CompressorGainDb) ? 0 : CompressorGainDb,
+    }.Clamped();
+
+    /// <summary>Wirkt sofort: auf den Effekt im Aufnahmepfad und auf die Messung für das VU-Meter.</summary>
+    private void ApplyCompressor()
+    {
+        try
+        {
+            var settings = BuildCompressorSettings();
+            _backend.SetCompressor(settings);
+            _meter.Compressor.Settings = settings;
+            if (!CompressorEnabled) GainReductionText = "";
+            UpdateCompressorWarning();
+            _options.Compressor = settings;
+            RecordingSettingsStore.Save(_options);
+        }
+        catch (Exception ex)
+        {
+            ErrorReporter.Log(ex, "Kompressor einstellen");
+        }
+    }
+
+    private void UpdateCompressorWarning()
+    {
+        bool hasAudio = !string.IsNullOrEmpty(SelectedAudioDevice?.Id);
+        CompressorWarning = CompressorEnabled && hasAudio && !_backend.IsCompressorActive && _backend.CompressorError is not null
+            ? "Der Kompressor konnte nicht in die Aufnahme eingebunden werden. Das VU-Meter zeigt das komprimierte Signal, " +
+              $"die Datei wird aber unkomprimiert aufgenommen. ({_backend.CompressorError})"
+            : null;
+    }
+
+    private void LoadCompressor(CompressorSettings c)
+    {
+        var s = (c ?? new CompressorSettings()).Clamped();
+        _compressorEnabled = s.Enabled;
+        _compressorThresholdDb = s.ThresholdDb;
+        _compressorRatio = s.Ratio;
+        _compressorGainDb = s.GainDb;
+        _backend.SetCompressor(s);
+        _meter.Compressor.Settings = s;
     }
 
     // ------------------------------------------------------------ Geräte & Formate
@@ -354,6 +433,7 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
             bool restored = wanted is not null && VideoFormatKey.For(wanted) == _options.VideoFormatKey;
             if (wanted is not null) await ApplyFormatAsync(wanted, suggestBitrate: !restored);
             PreviewPlayer = _backend.PreviewPlayer;
+            UpdateCompressorWarning();
             SaveOptions();
         }
         catch (Exception ex)
@@ -577,6 +657,7 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
         _options.AudioDeviceId = SelectedAudioDevice?.Id;
         _options.VideoFormatKey = SelectedVideoFormat is null ? null : VideoFormatKey.For(SelectedVideoFormat);
         _options.Encoding = BuildEncodingSettings();
+        _options.Compressor = BuildCompressorSettings();
         _options.OutputFolder = OutputFolder;
         _options.FileNamePattern = FileNamePattern;
         RecordingSettingsStore.Save(_options);

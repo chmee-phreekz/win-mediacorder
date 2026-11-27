@@ -100,7 +100,9 @@
         </Border>
 
         <ScrollViewer Grid.Row="1" Grid.Column="2" VerticalScrollBarVisibility="Auto">
-            <!-- StackPanel hat in WinUI 3 kein IsEnabled: ContentControl sperrt alle Einstellungen während der Aufnahme. -->
+            <!-- StackPanel hat in WinUI 3 kein IsEnabled: ContentControl sperrt Geräte- und Codec-Einstellungen während der Aufnahme.
+                 Der Kompressor bleibt bedienbar, auch während der Aufnahme. -->
+            <StackPanel Spacing="12">
             <ContentControl IsEnabled="{x:Bind ViewModel.CanEditSettings, Mode=OneWay}"
                             HorizontalContentAlignment="Stretch" VerticalContentAlignment="Top"
                             IsTabStop="False">
@@ -127,6 +129,51 @@
                     </StackPanel>
                 </Border>
 
+            </StackPanel>
+            </ContentControl>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel Spacing="10">
+                        <Grid>
+                            <TextBlock Text="Kompressor" Style="{StaticResource SectionHeader}" VerticalAlignment="Center" Margin="0" />
+                            <ToggleSwitch HorizontalAlignment="Right" MinWidth="0" OnContent="" OffContent=""
+                                          IsOn="{x:Bind ViewModel.CompressorEnabled, Mode=TwoWay}" />
+                        </Grid>
+                        <StackPanel Spacing="10" Opacity="{x:Bind CompressorOpacity(ViewModel.CompressorEnabled), Mode=OneWay}">
+                            <Grid>
+                                <TextBlock Text="Threshold" />
+                                <TextBlock HorizontalAlignment="Right" FontFamily="Consolas" Text="{x:Bind ViewModel.ThresholdText, Mode=OneWay}" />
+                            </Grid>
+                            <Slider Minimum="{x:Bind ViewModel.CompressorMinThreshold}" Maximum="{x:Bind ViewModel.CompressorMaxThreshold}"
+                                    StepFrequency="0.5" SmallChange="0.5" LargeChange="3"
+                                    Value="{x:Bind ViewModel.CompressorThresholdDb, Mode=TwoWay}" />
+                            <Grid>
+                                <TextBlock Text="Ratio" />
+                                <TextBlock HorizontalAlignment="Right" FontFamily="Consolas" Text="{x:Bind ViewModel.RatioText, Mode=OneWay}" />
+                            </Grid>
+                            <Slider Minimum="{x:Bind ViewModel.CompressorMinRatio}" Maximum="{x:Bind ViewModel.CompressorMaxRatio}"
+                                    StepFrequency="0.1" SmallChange="0.1" LargeChange="1"
+                                    Value="{x:Bind ViewModel.CompressorRatio, Mode=TwoWay}" />
+                            <Grid>
+                                <TextBlock Text="Gain" />
+                                <TextBlock HorizontalAlignment="Right" FontFamily="Consolas" Text="{x:Bind ViewModel.GainText, Mode=OneWay}" />
+                            </Grid>
+                            <Slider Minimum="{x:Bind ViewModel.CompressorMinGain}" Maximum="{x:Bind ViewModel.CompressorMaxGain}"
+                                    StepFrequency="0.5" SmallChange="0.5" LargeChange="3"
+                                    Value="{x:Bind ViewModel.CompressorGainDb, Mode=TwoWay}" />
+                            <TextBlock Text="{x:Bind ViewModel.GainReductionText, Mode=OneWay}" FontFamily="Consolas"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                        <InfoBar Severity="Warning" IsClosable="False"
+                                 IsOpen="{x:Bind ViewModel.CompressorWarning, Mode=OneWay, Converter={StaticResource RecordNotNullToBool}}"
+                                 Message="{x:Bind ViewModel.CompressorWarning, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+
+            <ContentControl IsEnabled="{x:Bind ViewModel.CanEditSettings, Mode=OneWay}"
+                            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Top"
+                            IsTabStop="False">
+            <StackPanel Spacing="12">
                 <Border Style="{StaticResource Card}">
                     <StackPanel Spacing="12">
                         <TextBlock Text="Codec" Style="{StaticResource SectionHeader}" />
@@ -173,6 +220,7 @@
                 </Border>
             </StackPanel>
             </ContentControl>
+            </StackPanel>
         </ScrollViewer>
 
         <!-- Transportleiste -->
