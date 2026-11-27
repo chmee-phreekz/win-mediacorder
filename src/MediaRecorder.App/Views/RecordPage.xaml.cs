@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using MediaRecorder.App.Services;
 using MediaRecorder.App.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -27,16 +28,38 @@ public sealed partial class RecordPage : Page
         // eine laufende Aufnahme läuft also weiter.
         if (_initialized) return;
         _initialized = true;
-        await ViewModel.InitializeAsync();
+        try
+        {
+            await ViewModel.InitializeAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorReporter.Report(ex, "Aufnahmeseite initialisieren");
+        }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(RecordViewModel.PreviewPlayer))
-            Preview.SetMediaPlayer(ViewModel.PreviewPlayer);
+        if (e.PropertyName != nameof(RecordViewModel.PreviewPlayer)) return;
+        try
+        {
+            // Nur neu setzen, wenn es wirklich ein anderer Player ist (Backend behält einen Player dauerhaft).
+            if (!ReferenceEquals(Preview.MediaPlayer, ViewModel.PreviewPlayer))
+                Preview.SetMediaPlayer(ViewModel.PreviewPlayer);
+        }
+        catch (Exception ex)
+        {
+            ErrorReporter.Report(ex, "Vorschau verbinden");
+        }
     }
 
     private async void PickFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try { await PickFolderAsync(); }
+        catch (Exception ex) { ErrorReporter.Report(ex, "Zielordner wählen"); }
+    }
+
+    private async System.Threading.Tasks.Task PickFolderAsync()
     {
         var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.VideosLibrary };
         picker.FileTypeFilter.Add("*");

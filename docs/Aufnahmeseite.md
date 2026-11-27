@@ -25,3 +25,10 @@
 ## Testen
 Visual Studio 2022 (17.12+) mit Workload „Windows-Anwendungsentwicklung“, `MediaRecorder.sln` öffnen, Plattform x64, F5.
 Windows-Einstellungen > Datenschutz > Kamera und Mikrofon: Zugriff für Desktop-Apps erlauben.
+
+## Fehlerbehandlung und Protokoll
+- Unbehandelte Fehler (UI, Tasks) werden abgefangen, im Dialog gemeldet und protokolliert; die App läuft weiter.
+- Protokoll: `%LOCALAPPDATA%\MediaRecorder\logs\app-JJJJ-MM-TT.log`.
+- Die Vorschau nutzt einen dauerhaften MediaPlayer, beim Gerätewechsel wird nur die Quelle getauscht
+  (das Verwerfen eines angezeigten Players führte zum nativen Absturz 0xC000027B).
+- Lässt sich ein Audiogerät nicht öffnen, läuft die Vorschau ohne Ton weiter, mit Hinweis.

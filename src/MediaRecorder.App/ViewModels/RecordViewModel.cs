@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MediaRecorder.App.Services;
 using MediaRecorder.App.Services.Recording;
 using MediaRecorder.Core.Devices;
 using MediaRecorder.Core.Encoding;
@@ -39,10 +40,15 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
         LoadEncoding(_options.Encoding);
         UpdateCodecLists();
 
-        _backend.StateChanged += (_, s) => _ui.TryEnqueue(() => State = s);
-        _backend.Faulted += (_, f) => _ui.TryEnqueue(() => OnFaulted(f));
-        _devices.DevicesChanged += (_, _) => _ui.TryEnqueue(async () => await RefreshDevicesAsync());
-        _devices.DeviceRemoved += (_, id) => _ui.TryEnqueue(() =>
+        // Alle Ereignisse kommen aus Hintergrund-Threads: immer auf den UI-Thread wechseln und Fehler abfangen.
+        _backend.StateChanged += (_, s) => OnUi(() => State = s);
+        _backend.Faulted += (_, f) => OnUi(() => OnFaulted(f));
+        _devices.DevicesChanged += (_, _) => _ui.TryEnqueue(async () =>
+        {
+            try { await RefreshDevicesAsync(); }
+            catch (Exception ex) { ErrorReporter.Log(ex, "Geräteliste aktualisieren"); }
+        });
+        _devices.DeviceRemoved += (_, id) => OnUi(() =>
         {
             if (id == SelectedVideoDevice?.Id || id == SelectedAudioDevice?.Id)
                 ShowError("Ein gewähltes Gerät wurde getrennt.");
@@ -52,6 +58,12 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
         _clock.Interval = TimeSpan.FromMilliseconds(250);
         _clock.Tick += (_, _) => UpdateClock();
     }
+
+    private void OnUi(Action action) => _ui.TryEnqueue(() =>
+    {
+        try { action(); }
+        catch (Exception ex) { ErrorReporter.Report(ex, "UI-Aktualisierung (Aufnahme)"); }
+    });
 
     // ------------------------------------------------------------ Geräte & Formate
 
@@ -66,7 +78,15 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
 
     partial void OnSelectedVideoDeviceChanged(CaptureDeviceInfo? value) { if (!_suppressReinit) _ = OpenDevicesAsync(); }
     partial void OnSelectedAudioDeviceChanged(CaptureDeviceInfo? value) { if (!_suppressReinit) _ = OpenDevicesAsync(); }
-    partial void OnSelectedVideoFormatChanged(VideoCaptureFormat? value) { if (!_suppressReinit && value is not null) _ = ApplyFormatAsync(value, suggestBitrate: true); }
+    partial void OnSelectedVideoFormatChanged(VideoCaptureFormat? value) { if (!_suppressReinit && value is not null) _ = ApplyFormatByUserAsync(value); }
+
+    /// <summary>Formatwechsel durch den Benutzer: nie gleichzeitig mit einem Geräte-Öffnen.</summary>
+    private async Task ApplyFormatByUserAsync(VideoCaptureFormat format)
+    {
+        await _openGate.WaitAsync();
+        try { await ApplyFormatAsync(format, suggestBitrate: true); }
+        finally { _openGate.Release(); }
+    }
 
     // ------------------------------------------------------------ Encoding
 
@@ -250,14 +270,37 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
+    private readonly System.Threading.SemaphoreSlim _openGate = new(1, 1);
+    private int _openRequest;
+
+    /// <summary>
+    /// Öffnet die gewählten Geräte. Schnelle Mehrfachwechsel (z.B. Durchklicken der Audioliste) werden
+    /// zusammengefasst: es läuft immer nur ein Öffnen gleichzeitig, und nur der letzte Wunsch wird ausgeführt.
+    /// </summary>
     private async Task OpenDevicesAsync()
     {
-        if (SelectedVideoDevice is null || IsRecording) return;
-        ErrorMessage = null;
+        var request = System.Threading.Interlocked.Increment(ref _openRequest);
+        await _openGate.WaitAsync();
         try
         {
+            if (request != _openRequest) return; // inzwischen neuer Wunsch
+            if (SelectedVideoDevice is null || IsRecording) return;
+            ErrorMessage = null;
+
+            var videoId = SelectedVideoDevice.Id;
             var audioId = string.IsNullOrEmpty(SelectedAudioDevice?.Id) ? null : SelectedAudioDevice!.Id;
-            await _backend.InitializeAsync(SelectedVideoDevice.Id, audioId);
+            try
+            {
+                await _backend.InitializeAsync(videoId, audioId);
+            }
+            catch (Exception audioEx) when (audioId is not null)
+            {
+                // Audio-Gerät lässt sich nicht zusammen mit dem Video öffnen: Vorschau ohne Ton weiter ermöglichen.
+                ErrorReporter.Log(audioEx, $"Audio-Gerät '{SelectedAudioDevice?.Name}' konnte nicht geöffnet werden");
+                await _backend.InitializeAsync(videoId, null);
+                ShowError($"Das Audiogerät „{SelectedAudioDevice?.Name}“ konnte nicht geöffnet werden ({audioEx.Message}). " +
+                          "Vorschau läuft ohne Ton, bitte ein anderes Audiogerät wählen.");
+            }
 
             _suppressReinit = true;
             VideoFormats.Clear();
@@ -276,8 +319,12 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
         catch (Exception ex)
         {
             _suppressReinit = false;
-            PreviewPlayer = null;
-            ShowError(ex.Message);
+            ErrorReporter.Log(ex, "Geräte öffnen");
+            ShowError("Gerät konnte nicht geöffnet werden: " + ex.Message);
+        }
+        finally
+        {
+            _openGate.Release();
         }
     }
 
@@ -415,7 +462,11 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
         UpdateFreeSpace();
     }
 
-    private void ShowError(string message) => ErrorMessage = message;
+    private void ShowError(string message)
+    {
+        ErrorMessage = message;
+        ErrorReporter.Log(null, "Meldung Aufnahmeseite: " + message);
+    }
 
     private void UpdateClock()
     {
