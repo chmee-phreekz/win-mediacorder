@@ -7,14 +7,16 @@ WinUI-3-Anwendung (C#, Dark Mode) zum Aufnehmen und einfachen Schneiden von Vide
 
 ## Aufbau
 
-- `src/MediaRecorder.App` – WinUI-3-Oberfläche (Windows App SDK, unpackaged)
+- `src/MediaRecorder.App` – WinUI-3-Oberfläche (Windows App SDK, als MSIX-Paket)
+- `src/MediaRecorder.Effects` – Kompressor und LUT als Media-Foundation-Effekte (WinRT-Komponente, registriert in `Package.appxmanifest`)
 - `src/MediaRecorder.Core` – plattformunabhängige Logik (net8.0)
 - `tests/MediaRecorder.Core.Tests` – xUnit-Tests für Core
 - `docs/` – Beschreibung der Aufnahme- und Schnittseite
 
 ## Bauen
 
-Windows 10/11, Visual Studio 2022 oder 2026 mit Workload „Windows-Anwendungsentwicklung“ und .NET 8 SDK. Der C++-Workload ist nicht nötig (siehe `Directory.Build.targets`). `MediaRecorder.sln` öffnen und `MediaRecorder.App` starten.
+Windows 10/11, Visual Studio 2022 oder 2026 mit Workload „Windows-Anwendungsentwicklung“ und .NET 8 SDK. Der C++-Workload ist nicht nötig (siehe `Directory.Build.targets`).
+Windows-Einstellungen > System > Für Entwickler: **Entwicklermodus** einschalten. F5 installiert das MSIX-Paket lokal und startet es. `MediaRecorder.sln` öffnen und `MediaRecorder.App` starten.
 
 Tests: `dotnet test tests/MediaRecorder.Core.Tests`
 

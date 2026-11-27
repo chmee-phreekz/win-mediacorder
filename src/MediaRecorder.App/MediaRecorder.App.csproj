@@ -10,8 +10,12 @@
     <Platforms>x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <UseWinUI>true</UseWinUI>
-    <!-- Unpackaged: startet direkt per F5 bzw. als .exe, kein MSIX nötig. -->
-    <WindowsPackageType>None</WindowsPackageType>
+    <!--
+      MSIX-Paket (Single-Project-MSIX): nötig, damit Media Foundation den Kompressor-Effekt aktivieren kann
+      (Registrierung in Package.appxmanifest). F5 installiert und startet das Paket; Windows-Entwicklermodus muss an sein.
+    -->
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <GenerateAppInstallerFile>false</GenerateAppInstallerFile>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -32,6 +36,7 @@
     <ProjectReference Include="..\MediaRecorder.Effects\MediaRecorder.Effects.csproj" SetPlatform="Platform=$(Platform)" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Assets\*.png" />
     <Content Include="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
