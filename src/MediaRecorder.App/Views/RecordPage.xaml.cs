@@ -56,6 +56,7 @@ public sealed partial class RecordPage : Page
             if (active)
             {
                 AttachPreview();
+                _ = ViewModel.ResumePreviewAsync(); // pausierte Live-Vorschau neu aufbauen, sonst bleibt sie schwarz
             }
             else
             {
