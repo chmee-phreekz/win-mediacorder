@@ -158,14 +158,41 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
     }
 
     /// <summary>Muss unter _gate laufen.</summary>
-    private async Task StopLutPreviewAsync()
+    /// <param name="restartPlayerPreview">
+    /// True: die normale Vorschau neu aufbauen. Ein pausierter Live-MediaPlayer setzt nach Play() oft nicht
+    /// fort und bleibt schwarz, deshalb wird die Quelle neu erzeugt statt nur fortgesetzt.
+    /// </param>
+    private async Task StopLutPreviewAsync(bool restartPlayerPreview = true)
     {
         var r = _lutPreview;
         if (r is null) return;
         _lutPreview = null;
         try { await r.DisposeAsync(); } catch { }
-        try { if (_previewPlayer?.Source is not null) _previewPlayer.Play(); } catch { }
+        if (restartPlayerPreview && _capture is not null)
+        {
+            try { await StartPreviewAsync(); }
+            catch (Exception ex) { ErrorReporter.Log(ex, "Vorschau nach LUT neu starten"); }
+        }
         LutPreviewActiveChanged?.Invoke(this, false);
+    }
+
+    /// <summary>
+    /// Vorschau nach einer Pause (z.B. Rückkehr von der Schnittseite) neu verbinden.
+    /// Läuft die LUT-Vorschau, ist nichts zu tun.
+    /// </summary>
+    public async Task RefreshPreviewAsync()
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            if (_capture is null || _lutPreview is not null) return;
+            await StartPreviewAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorReporter.Log(ex, "Vorschau neu verbinden");
+        }
+        finally { _gate.Release(); }
     }
 
     private async Task AttachLutAsync()
@@ -341,7 +368,7 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
             }
 
             _currentProps = match.Props;
-            await StopLutPreviewAsync();
+            await StopLutPreviewAsync(restartPlayerPreview: false);
             await StartPreviewAsync(); // Vorschau neu verbinden, damit sie das neue Format zeigt.
             await UpdateLutPreviewAsync();
         }
@@ -641,7 +668,7 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
 
     private async Task ReleaseCaptureAsync()
     {
-        await StopLutPreviewAsync();
+        await StopLutPreviewAsync(restartPlayerPreview: false);
         StopPreview();
         if (_capture is not null)
         {

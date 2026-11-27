@@ -30,9 +30,7 @@ public sealed partial class RecordPage : Page
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        // NavigationCacheMode=Required: Seite bleibt beim Wechsel zur Schnittseite bestehen,
-        // eine laufende Aufnahme läuft also weiter.
-        // Beim Zurückkehren von der Schnittseite die Vorschau wieder verbinden.
+        // Die Seite bleibt dauerhaft im Fenster (MainWindow blendet nur um), Loaded kommt also nur einmal.
         AttachPreview();
         if (_initialized) return;
         _initialized = true;
@@ -47,22 +45,44 @@ public sealed partial class RecordPage : Page
     }
 
     /// <summary>
-    /// Beim Wechsel zur Schnittseite wird diese Seite aus dem Fenster genommen. Ein MediaPlayerElement,
+    /// Vom Hauptfenster beim Seitenwechsel aufgerufen. Die Seite bleibt im visuellen Baum (nur ausgeblendet);
+    /// solange sie verborgen ist, ruht die Vorschau, die Aufnahme läuft unverändert weiter.
+    /// Der MediaPlayer bleibt dabei immer am MediaPlayerElement, es wird nur pausiert und fortgesetzt.
+    /// </summary>
+    public void SetActive(bool active)
+    {
+        try
+        {
+            if (active)
+            {
+                AttachPreview();
+                _ = ViewModel.ResumePreviewAsync(); // pausierte Live-Vorschau neu aufbauen, sonst bleibt sie schwarz
+            }
+            else
+            {
+                _isVisible = false;
+                if (!ViewModel.IsLutPreviewActive) ViewModel.PreviewPlayer?.Pause();
+                Meter.Reset();
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorReporter.Log(ex, "Seitenwechsel Aufnahme");
+        }
+    }
+
+    /// <summary>
+    /// Wird nur noch beim Schließen des Fensters ausgelöst (die Seite bleibt sonst im Baum). Ein MediaPlayerElement,
     /// das außerhalb des sichtbaren Baums weiter ein Live-Kamerabild rendert, kann nativ abstürzen.
     /// Deshalb wird die Vorschau gelöst (Aufnahme läuft unverändert weiter) und beim Zurückkehren neu verbunden.
     /// </summary>
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         _isVisible = false;
-        try
-        {
-            Preview.SetMediaPlayer(null);
-            Meter.Reset();
-        }
-        catch (Exception ex)
-        {
-            ErrorReporter.Log(ex, "Vorschau lösen");
-        }
+        // Den MediaPlayer bewusst NICHT vom MediaPlayerElement lösen: Lösen und erneutes Verbinden
+        // war die Ursache des Absturzes beim Zurückwechseln von der Schnittseite.
+        try { ViewModel.PreviewPlayer?.Pause(); }
+        catch (Exception ex) { ErrorReporter.Log(ex, "Vorschau pausieren"); }
     }
 
     private bool _isVisible;
@@ -74,7 +94,7 @@ public sealed partial class RecordPage : Page
         {
             if (!ReferenceEquals(Preview.MediaPlayer, ViewModel.PreviewPlayer))
                 Preview.SetMediaPlayer(ViewModel.PreviewPlayer);
-            if (ViewModel.PreviewPlayer?.Source is not null)
+            if (ViewModel.PreviewPlayer?.Source is not null && !ViewModel.IsLutPreviewActive)
                 ViewModel.PreviewPlayer.Play();
         }
         catch (Exception ex)

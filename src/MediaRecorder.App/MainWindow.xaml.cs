@@ -24,6 +24,10 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         AppWindow.Closing += OnClosing;
 
+        _editPage.Visibility = Visibility.Collapsed;
+        PageHost.Children.Add(_recordPage);
+        PageHost.Children.Add(_editPage);
+
         Nav.SelectedItem = Nav.MenuItems.OfType<NavigationViewItem>().First();
     }
 
@@ -33,7 +37,12 @@ public sealed partial class MainWindow : Window
         {
             var tag = (args.SelectedItem as NavigationViewItem)?.Tag as string;
             Services.ErrorReporter.Log(null, $"Seitenwechsel: {tag}");
-            ContentFrame.Content = tag == "edit" ? _editPage : _recordPage;
+            bool edit = tag == "edit";
+            // Nur Sichtbarkeit umschalten, nie aus dem Baum entfernen (siehe MainWindow.xaml).
+            _recordPage.Visibility = edit ? Visibility.Collapsed : Visibility.Visible;
+            _editPage.Visibility = edit ? Visibility.Visible : Visibility.Collapsed;
+            _recordPage.SetActive(!edit);
+            _editPage.SetActive(edit);
         }
         catch (Exception ex)
         {

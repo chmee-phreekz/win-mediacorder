@@ -261,6 +261,12 @@ public sealed partial class EditPage : Page
         return await ConfirmAsync("Export läuft", "Beim Beenden wird der laufende Export abgebrochen.", "Abbrechen und beenden");
     }
 
+    /// <summary>Vom MainWindow beim Seitenwechsel aufgerufen; beim Verlassen wird die Wiedergabe angehalten.</summary>
+    public void SetActive(bool active)
+    {
+        if (!active) ViewModel.PausePlayback();
+    }
+
     public ValueTask ShutdownAsync() => ViewModel.DisposeAsync();
 
     private async Task<bool> ConfirmAsync(string title, string message, string primary)

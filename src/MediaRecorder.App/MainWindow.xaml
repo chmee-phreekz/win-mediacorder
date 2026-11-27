@@ -38,7 +38,12 @@
                     <NavigationViewItem.Icon><FontIcon Glyph="&#xE8C6;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
             </NavigationView.MenuItems>
-            <Frame x:Name="ContentFrame" />
+            <!--
+              Beide Seiten liegen dauerhaft im Fenster und werden nur ein- und ausgeblendet.
+              Ein MediaPlayerElement, das aus dem visuellen Baum genommen und wieder eingehängt wird
+              (Frame.Content-Wechsel), führt in WinUI 3 zu nativen Abstürzen (0xC000027B).
+            -->
+            <Grid x:Name="PageHost" />
         </NavigationView>
     </Grid>
 </Window>

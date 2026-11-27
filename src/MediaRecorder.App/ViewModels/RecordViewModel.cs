@@ -253,6 +253,13 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
 
     partial void OnLutEnabledChanged(bool value) { if (!_suppressLutApply) _ = ApplyLutAsync(); }
 
+    /// <summary>Vorschau nach Seitenwechsel neu verbinden.</summary>
+    public async Task ResumePreviewAsync()
+    {
+        try { await _backend.RefreshPreviewAsync(); }
+        catch (Exception ex) { ErrorReporter.Log(ex, "Vorschau fortsetzen"); }
+    }
+
     /// <summary>Von der Page nach Auswahl einer .cube-Datei.</summary>
     public async Task SetLutFileAsync(string path)
     {

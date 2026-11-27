@@ -65,6 +65,9 @@ public interface IRecordingBackend : IAsyncDisposable
     /// <summary>LUT-Vorschaubild (Hintergrund-Thread); der Empfänger gibt das Bitmap frei.</summary>
     event EventHandler<SoftwareBitmap>? LutPreviewFrame;
 
+    /// <summary>Vorschau nach einer Pause neu verbinden (Quelle neu erzeugen).</summary>
+    Task RefreshPreviewAsync();
+
     Task StartRecordingAsync(string filePath, EncodingSettings settings);
     Task PauseAsync();
     Task ResumeAsync();
