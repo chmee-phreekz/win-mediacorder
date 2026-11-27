@@ -22,6 +22,9 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
 
     private readonly IRecordingBackend _backend;
     private readonly CaptureDeviceService _devices = new();
+    private readonly AudioLevelMonitor _meter = new();
+    private AudioLevels _latestLevels;
+    private int _levelsPending;
     private readonly DispatcherQueue _ui;
     private readonly DispatcherQueueTimer _clock;
     private readonly Stopwatch _elapsed = new();
@@ -43,6 +46,18 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
         // Alle Ereignisse kommen aus Hintergrund-Threads: immer auf den UI-Thread wechseln und Fehler abfangen.
         _backend.StateChanged += (_, s) => OnUi(() => State = s);
         _backend.Faulted += (_, f) => OnUi(() => OnFaulted(f));
+        _meter.LevelsAvailable += (_, l) =>
+        {
+            // Nur den neuesten Wert übergeben; höchstens ein UI-Auftrag gleichzeitig.
+            _latestLevels = l;
+            if (System.Threading.Interlocked.Exchange(ref _levelsPending, 1) == 1) return;
+            _ui.TryEnqueue(() =>
+            {
+                System.Threading.Interlocked.Exchange(ref _levelsPending, 0);
+                try { AudioLevelsChanged?.Invoke(this, _latestLevels); }
+                catch (Exception ex) { ErrorReporter.Log(ex, "VU-Meter"); }
+            });
+        };
         _devices.DevicesChanged += (_, _) => _ui.TryEnqueue(async () =>
         {
             try { await RefreshDevicesAsync(); }
@@ -64,6 +79,28 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
         try { action(); }
         catch (Exception ex) { ErrorReporter.Report(ex, "UI-Aktualisierung (Aufnahme)"); }
     });
+
+    // ------------------------------------------------------------ Audiopegel
+
+    /// <summary>Neue Pegelwerte für die VU-Anzeige (UI-Thread, ca. 30/s).</summary>
+    public event EventHandler<AudioLevels>? AudioLevelsChanged;
+
+    [ObservableProperty] private bool _isAudioMeterVisible;
+
+    private async Task StartMeterAsync(string? audioId)
+    {
+        try
+        {
+            await _meter.StartAsync(audioId);
+            IsAudioMeterVisible = _meter.IsRunning;
+        }
+        catch (Exception ex)
+        {
+            // Pegelanzeige ist Komfort: bei Fehler nur ausblenden, Aufnahme bleibt unberührt.
+            IsAudioMeterVisible = false;
+            ErrorReporter.Log(ex, "Pegelanzeige starten");
+        }
+    }
 
     // ------------------------------------------------------------ Geräte & Formate
 
@@ -289,14 +326,17 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
 
             var videoId = SelectedVideoDevice.Id;
             var audioId = string.IsNullOrEmpty(SelectedAudioDevice?.Id) ? null : SelectedAudioDevice!.Id;
+            await _meter.StopAsync();
             try
             {
                 await _backend.InitializeAsync(videoId, audioId);
+                await StartMeterAsync(audioId);
             }
             catch (Exception audioEx) when (audioId is not null)
             {
                 // Audio-Gerät lässt sich nicht zusammen mit dem Video öffnen: Vorschau ohne Ton weiter ermöglichen.
                 ErrorReporter.Log(audioEx, $"Audio-Gerät '{SelectedAudioDevice?.Name}' konnte nicht geöffnet werden");
+                IsAudioMeterVisible = false;
                 await _backend.InitializeAsync(videoId, null);
                 ShowError($"Das Audiogerät „{SelectedAudioDevice?.Name}“ konnte nicht geöffnet werden ({audioEx.Message}). " +
                           "Vorschau läuft ohne Ton, bitte ein anderes Audiogerät wählen.");
@@ -548,6 +588,7 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
         if (IsRecording) await StopAsync();
         SaveOptions();
         _devices.Dispose();
+        await _meter.DisposeAsync();
         await _backend.DisposeAsync();
     }
 }

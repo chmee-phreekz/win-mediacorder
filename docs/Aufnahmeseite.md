@@ -32,3 +32,12 @@ Windows-Einstellungen > Datenschutz > Kamera und Mikrofon: Zugriff für Desktop-
 - Die Vorschau nutzt einen dauerhaften MediaPlayer, beim Gerätewechsel wird nur die Quelle getauscht
   (das Verwerfen eines angezeigten Players führte zum nativen Absturz 0xC000027B).
 - Lässt sich ein Audiogerät nicht öffnen, läuft die Vorschau ohne Ton weiter, mit Hinweis.
+
+## VU-Meter
+- Rechts neben dem Videobild, Stereo, -60 … 0 dBFS. Balken = Spitzenpegel (schneller Anstieg, langsamer Abfall),
+  dünne Linie = RMS, weiße Linie = gehaltene Spitze (1,5 s), rote Lampe oben = Übersteuerung (≥ -0,5 dBFS, 2 s).
+- Misst über einen eigenen AudioGraph im geteilten Modus, unabhängig von der Aufnahme. Bei einem Fehler wird nur die Anzeige ausgeblendet.
+
+## Seitenwechsel
+- Beim Wechsel zur Schnittseite wird die Live-Vorschau vom Fenster gelöst und beim Zurückkehren neu verbunden.
+  Eine laufende Aufnahme läuft dabei weiter.
