@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using MediaRecorder.Core.Audio;
 using MediaRecorder.Core.Encoding;
 
 namespace MediaRecorder.Core.Recording;
@@ -25,6 +26,9 @@ public sealed class RecordingOptions
     public string? VideoFormatKey { get; set; }
 
     public EncodingSettings Encoding { get; set; } = new();
+
+    /// <summary>Kompressor für den Audioeingang (wirkt auf Aufnahme und VU-Meter).</summary>
+    public CompressorSettings Compressor { get; set; } = new();
 
     public string OutputFolder { get; set; } =
         Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);

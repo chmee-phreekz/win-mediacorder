@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MediaRecorder.Core.Audio;
 using MediaRecorder.Core.Devices;
 using MediaRecorder.Core.Encoding;
 using MediaRecorder.Core.Recording;
@@ -12,6 +13,8 @@ using Windows.Media.Capture;
 using Windows.Media.Capture.Frames;
 using Windows.Media.Core;
 using Windows.Media.Devices;
+using Windows.Foundation.Collections;
+using Windows.Media.Effects;
 using Windows.Media.MediaProperties;
 using Windows.Media.Playback;
 using Windows.Storage;
@@ -44,6 +47,57 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
     private RecordingState _state = RecordingState.Idle;
 
     public long MinimumFreeSpaceMb { get; set; } = 1024;
+
+    // ---------------------------------------------------------------- Kompressor
+
+    /// <summary>Name der registrierungsfreien WinRT-Klasse (app.manifest).</summary>
+    private const string CompressorEffectClass = "MediaRecorder.Effects.CompressorEffect";
+
+    private CompressorSettings _compressorSettings = new();
+    private PropertySet? _compressorProps;
+    private int _compressorVersion;
+
+    public bool IsCompressorActive { get; private set; }
+    public string? CompressorError { get; private set; }
+
+    public void SetCompressor(CompressorSettings settings)
+    {
+        _compressorSettings = settings.Clamped();
+        WriteCompressorProps();
+    }
+
+    /// <summary>Überträgt die Werte in das PropertySet, das der Effekt bei jedem Audiopuffer prüft.</summary>
+    private void WriteCompressorProps()
+    {
+        var p = _compressorProps;
+        if (p is null) return;
+        var s = _compressorSettings;
+        p["Enabled"] = s.Enabled;
+        p["ThresholdDb"] = s.ThresholdDb;
+        p["Ratio"] = s.Ratio;
+        p["GainDb"] = s.GainDb;
+        p["Version"] = System.Threading.Interlocked.Increment(ref _compressorVersion);
+    }
+
+    private async Task AttachCompressorAsync()
+    {
+        IsCompressorActive = false;
+        CompressorError = null;
+        try
+        {
+            _compressorProps = new PropertySet();
+            WriteCompressorProps();
+            await _capture!.AddAudioEffectAsync(new AudioEffectDefinition(CompressorEffectClass, _compressorProps));
+            IsCompressorActive = true;
+        }
+        catch (Exception ex)
+        {
+            // Aufnahme bleibt möglich, nur ohne Kompressor. Häufigste Ursache: WinRT.Host.dll fehlt im Ausgabeordner.
+            _compressorProps = null;
+            CompressorError = ex.Message;
+            ErrorReporter.Log(ex, "Kompressor-Effekt einbinden");
+        }
+    }
 
     public RecordingState State => _state;
     public event EventHandler<RecordingState>? StateChanged;
@@ -107,6 +161,8 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
             _capture.RecordLimitationExceeded += OnRecordLimitationExceeded;
 
             LoadFormats();
+            if (_hasAudio) await AttachCompressorAsync();
+            else { IsCompressorActive = false; CompressorError = null; _compressorProps = null; }
             await StartPreviewAsync();
             SetState(RecordingState.Previewing);
         }

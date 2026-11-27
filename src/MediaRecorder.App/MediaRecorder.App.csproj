@@ -28,6 +28,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MediaRecorder.Core\MediaRecorder.Core.csproj" />
+    <!-- Kompressor-Audioeffekt (WinRT-Komponente). Gleiche Plattform wie die App, damit das passende WinRT.Host.dll kopiert wird. -->
+    <ProjectReference Include="..\MediaRecorder.Effects\MediaRecorder.Effects.csproj" SetPlatform="Platform=$(Platform)" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />

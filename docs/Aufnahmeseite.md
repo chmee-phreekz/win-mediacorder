@@ -41,3 +41,12 @@ Windows-Einstellungen > Datenschutz > Kamera und Mikrofon: Zugriff für Desktop-
 ## Seitenwechsel
 - Beim Wechsel zur Schnittseite wird die Live-Vorschau vom Fenster gelöst und beim Zurückkehren neu verbunden.
   Eine laufende Aufnahme läuft dabei weiter.
+
+## Kompressor
+- Regler auf der Aufnahmeseite: Threshold (-60 … 0 dBFS), Ratio (1:1 … 20:1), Gain (-12 … +24 dB). Bleibt während der Aufnahme bedienbar.
+- Attack, Release und Knie nur im Code: Konstanten `AttackMs`, `ReleaseMs`, `KneeDb` in `src/MediaRecorder.Core/Audio/Compressor.cs`.
+- Wirkt auf die Aufnahme als Media-Foundation-Audioeffekt (`src/MediaRecorder.Effects`, WinRT-Komponente),
+  registriert ohne Installation über `app.manifest` (activatableClass → WinRT.Host.dll).
+- Das VU-Meter rechnet denselben Kompressor mit denselben Einstellungen und zeigt so sofort das komprimierte Signal
+  sowie die aktuelle Pegelreduktion.
+- Lässt sich der Effekt nicht einbinden, erscheint eine Warnung; die Aufnahme läuft dann unkomprimiert weiter.

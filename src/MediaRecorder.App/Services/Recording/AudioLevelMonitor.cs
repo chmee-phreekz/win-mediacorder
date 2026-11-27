@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using MediaRecorder.Core.Audio;
 using Windows.Devices.Enumeration;
 using Windows.Media;
 using Windows.Media.Audio;
@@ -11,7 +12,7 @@ using Windows.Media.Render;
 namespace MediaRecorder.App.Services.Recording;
 
 /// <summary>Pegel eines Kanals in dBFS (-∞ … 0).</summary>
-public readonly record struct AudioLevels(double LeftPeakDb, double RightPeakDb, double LeftRmsDb, double RightRmsDb, int Channels);
+public readonly record struct AudioLevels(double LeftPeakDb, double RightPeakDb, double LeftRmsDb, double RightRmsDb, int Channels, double GainReductionDb = 0);
 
 /// <summary>
 /// Misst den Pegel des gewählten Audioeingangs für die VU-Anzeige.
@@ -38,6 +39,12 @@ public sealed class AudioLevelMonitor : IAsyncDisposable
     public event EventHandler<AudioLevels>? LevelsAvailable;
 
     public bool IsRunning => _graph is not null;
+
+    /// <summary>
+    /// Gleicher Kompressor (gleicher Algorithmus, gleiche Einstellungen) wie im Aufnahmepfad.
+    /// Die Anzeige zeigt damit sofort das Signal, wie es in der Datei landet.
+    /// </summary>
+    public Compressor Compressor { get; } = new();
 
     public async Task StartAsync(string? audioDeviceId)
     {
@@ -71,6 +78,8 @@ public sealed class AudioLevelMonitor : IAsyncDisposable
             _input = inputResult.DeviceInputNode;
             _output = output;
             _channels = (int)Math.Max(1, graph.EncodingProperties.ChannelCount);
+            Compressor.SetSampleRate((int)Math.Max(8000, graph.EncodingProperties.SampleRate));
+            Compressor.Reset();
             ResetAccumulators();
 
             graph.QuantumStarted += OnQuantumStarted;
@@ -133,7 +142,8 @@ public sealed class AudioLevelMonitor : IAsyncDisposable
                 ToDb(_peakL), ToDb(_channels > 1 ? _peakR : _peakL),
                 ToDb(Math.Sqrt(_sumSqL / Math.Max(1, _samples))),
                 ToDb(Math.Sqrt((_channels > 1 ? _sumSqR : _sumSqL) / Math.Max(1, _samples))),
-                _channels);
+                _channels,
+                Compressor.GainReductionDb);
             ResetAccumulators();
             LevelsAvailable?.Invoke(this, levels);
         }
@@ -146,15 +156,17 @@ public sealed class AudioLevelMonitor : IAsyncDisposable
 
     private unsafe void Accumulate(AudioFrame frame)
     {
-        using var buffer = frame.LockBuffer(AudioBufferAccessMode.Read);
+        using var buffer = frame.LockBuffer(AudioBufferAccessMode.ReadWrite);
         using var reference = buffer.CreateReference();
         var access = WinRT.CastExtensions.As<IMemoryBufferByteAccess>(reference);
         access.GetBuffer(out byte* data, out uint capacity);
 
         // AudioGraph arbeitet intern immer mit 32-Bit-Float, verschachtelt (L R L R ...).
         var samples = (float*)data;
-        int count = (int)(buffer.Length / sizeof(float));
+        int count = (int)(Math.Min(buffer.Length, capacity) / sizeof(float));
         int ch = _channels;
+        // Erst komprimieren (Kopie des Signals, die Aufnahme ist davon unabhängig), dann messen.
+        Compressor.Process(new Span<float>(samples, count), ch);
         for (int i = 0; i + ch - 1 < count; i += ch)
         {
             float l = samples[i];
