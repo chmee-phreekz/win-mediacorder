@@ -14,6 +14,6 @@ WinUI-3-Anwendung (C#, Dark Mode) zum Aufnehmen und einfachen Schneiden von Vide
 
 ## Bauen
 
-Windows 10/11, Visual Studio 2022 mit Workload „Windows-Anwendungsentwicklung“ und .NET 8 SDK. `MediaRecorder.sln` öffnen und `MediaRecorder.App` starten.
+Windows 10/11, Visual Studio 2022 oder 2026 mit Workload „Windows-Anwendungsentwicklung“ und .NET 8 SDK. Der C++-Workload ist nicht nötig (siehe `Directory.Build.targets`). `MediaRecorder.sln` öffnen und `MediaRecorder.App` starten.
 
 Tests: `dotnet test tests/MediaRecorder.Core.Tests`

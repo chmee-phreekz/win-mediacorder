@@ -1,0 +1,17 @@
+<Project>
+  <!--
+    Workaround für WindowsAppSDK-Issue #5102:
+    Die MSIX-Tooling-Targets (Microsoft.Build.Msix.Packaging.targets, Target _EnsurePdbCmfExeFullPath)
+    rufen die Inline-Task "GetLatestMSVCVersion" auf und suchen mspdbcmf.exe unter
+    $(VsInstallRoot)\VC\Tools\MSVC. Ohne installierten C++-Workload existiert der Ordner nicht,
+    die Task wirft DirectoryNotFoundException und der Build bricht ab.
+
+    mspdbcmf.exe wird nur für das Symbolpaket (.appxsym) eines MSIX-Pakets gebraucht.
+    Diese App ist unpackaged, daher: Pfad vorbelegen (Target wird übersprungen) und Symbolpaket aus.
+    Ist der C++-Workload installiert (VCToolsInstallDir gesetzt), greift nichts hiervon.
+  -->
+  <PropertyGroup Condition="'$(VCToolsInstallDir)' == '' and '$(MsPdbCmfExeFullpath)' == '' and !Exists('$(VsInstallRoot)\VC\Tools\MSVC')">
+    <MsPdbCmfExeFullpath>$(MSBuildThisFileDirectory)tools\no-mspdbcmf.exe</MsPdbCmfExeFullpath>
+    <AppxSymbolPackageEnabled>false</AppxSymbolPackageEnabled>
+  </PropertyGroup>
+</Project>
