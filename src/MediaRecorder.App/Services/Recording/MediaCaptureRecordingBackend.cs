@@ -8,6 +8,8 @@ using MediaRecorder.Core.Audio;
 using MediaRecorder.Core.Devices;
 using MediaRecorder.Core.Encoding;
 using MediaRecorder.Core.Recording;
+using MediaRecorder.Core.Video;
+using Windows.Graphics.Imaging;
 using MediaRecorder.App.Services;
 using Windows.Media.Capture;
 using Windows.Media.Capture.Frames;
@@ -51,7 +53,7 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
     // ---------------------------------------------------------------- Kompressor
 
     /// <summary>Name der registrierungsfreien WinRT-Klasse (app.manifest).</summary>
-    private const string CompressorEffectClass = "MediaRecorder.Effects.CompressorEffect";
+    private const string CompressorEffectClass = EffectRegistration.CompressorClassId;
 
     private CompressorSettings _compressorSettings = new();
     private PropertySet? _compressorProps;
@@ -77,6 +79,112 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
         p["Ratio"] = s.Ratio;
         p["GainDb"] = s.GainDb;
         p["Version"] = System.Threading.Interlocked.Increment(ref _compressorVersion);
+    }
+
+    // ---------------------------------------------------------------- LUT
+
+    private LutSettings _lutSettings = new();
+    private BgraLutTable? _previewTable;
+    private PropertySet? _lutProps;
+    private int _lutVersion;
+    private LutPreviewRenderer? _lutPreview;
+
+    public bool IsLutEffectActive { get; private set; }
+    public string? LutEffectError { get; private set; }
+    public bool IsLutPreviewActive => _lutPreview is not null;
+    public event EventHandler<bool>? LutPreviewActiveChanged;
+    public event EventHandler<SoftwareBitmap>? LutPreviewFrame;
+
+    public async Task SetLutAsync(LutSettings settings)
+    {
+        BgraLutTable? table = null;
+        if (settings.Enabled && !string.IsNullOrEmpty(settings.Path))
+        {
+            // Datei prüfen und Vorschau-Tabelle bauen, bevor irgendetwas umgeschaltet wird.
+            table = await Task.Run(() => new BgraLutTable(CubeLut.Load(settings.Path!)));
+        }
+
+        await _gate.WaitAsync();
+        try
+        {
+            _lutSettings = settings;
+            _previewTable = table;
+            WriteLutProps();
+            await UpdateLutPreviewAsync();
+        }
+        finally { _gate.Release(); }
+    }
+
+    private void WriteLutProps()
+    {
+        var p = _lutProps;
+        if (p is null) return;
+        p["Enabled"] = _lutSettings.Enabled && _previewTable is not null;
+        p["LutPath"] = _lutSettings.Path ?? "";
+        p["Version"] = Interlocked.Increment(ref _lutVersion);
+    }
+
+    /// <summary>Muss unter _gate laufen.</summary>
+    private async Task UpdateLutPreviewAsync()
+    {
+        bool want = _previewTable is not null && _capture is not null && _previewSource is not null;
+        if (want && _lutPreview is not null)
+        {
+            _lutPreview.SetTable(_previewTable!);
+            return;
+        }
+        if (!want)
+        {
+            await StopLutPreviewAsync();
+            return;
+        }
+
+        try
+        {
+            var props = _currentProps;
+            var renderer = await LutPreviewRenderer.StartAsync(_capture!, _previewSource!,
+                props?.Width ?? 0, props?.Height ?? 0, _previewTable!);
+            renderer.FrameReady += (_, bmp) => LutPreviewFrame?.Invoke(this, bmp);
+            _lutPreview = renderer;
+            try { _previewPlayer?.Pause(); } catch { } // MediaPlayer-Vorschau ruht, solange die LUT-Vorschau läuft
+            LutPreviewActiveChanged?.Invoke(this, true);
+        }
+        catch (Exception ex)
+        {
+            // Vorschau ohne LUT ist besser als keine Vorschau.
+            ErrorReporter.Log(ex, "LUT-Vorschau starten");
+            LutEffectError ??= "LUT-Vorschau nicht verfügbar: " + ex.Message;
+        }
+    }
+
+    /// <summary>Muss unter _gate laufen.</summary>
+    private async Task StopLutPreviewAsync()
+    {
+        var r = _lutPreview;
+        if (r is null) return;
+        _lutPreview = null;
+        try { await r.DisposeAsync(); } catch { }
+        try { if (_previewPlayer?.Source is not null) _previewPlayer.Play(); } catch { }
+        LutPreviewActiveChanged?.Invoke(this, false);
+    }
+
+    private async Task AttachLutAsync()
+    {
+        IsLutEffectActive = false;
+        LutEffectError = null;
+        try
+        {
+            _lutProps = new PropertySet();
+            WriteLutProps();
+            await _capture!.AddVideoEffectAsync(new VideoEffectDefinition(EffectRegistration.LutClassId, _lutProps), MediaStreamType.VideoRecord);
+            IsLutEffectActive = true;
+        }
+        catch (Exception ex)
+        {
+            _lutProps = null;
+            LutEffectError = ex.Message;
+            ErrorReporter.Log(ex, "LUT-Effekt einbinden");
+        }
     }
 
     private async Task AttachCompressorAsync()
@@ -161,9 +269,11 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
             _capture.RecordLimitationExceeded += OnRecordLimitationExceeded;
 
             LoadFormats();
+            await AttachLutAsync();
             if (_hasAudio) await AttachCompressorAsync();
             else { IsCompressorActive = false; CompressorError = null; _compressorProps = null; }
             await StartPreviewAsync();
+            await UpdateLutPreviewAsync();
             SetState(RecordingState.Previewing);
         }
         catch
@@ -231,7 +341,9 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
             }
 
             _currentProps = match.Props;
+            await StopLutPreviewAsync();
             await StartPreviewAsync(); // Vorschau neu verbinden, damit sie das neue Format zeigt.
+            await UpdateLutPreviewAsync();
         }
         finally
         {
@@ -527,8 +639,9 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
 
     // ---------------------------------------------------------------- Aufräumen
 
-    private Task ReleaseCaptureAsync()
+    private async Task ReleaseCaptureAsync()
     {
+        await StopLutPreviewAsync();
         StopPreview();
         if (_capture is not null)
         {
@@ -539,7 +652,6 @@ public sealed class MediaCaptureRecordingBackend : IRecordingBackend
         }
         _formats.Clear();
         _currentProps = null;
-        return Task.CompletedTask;
     }
 
     public async ValueTask DisposeAsync()

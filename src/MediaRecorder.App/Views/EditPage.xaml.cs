@@ -30,6 +30,8 @@ public sealed partial class EditPage : Page
         FormatBox.SelectedItem = ViewModel.Format;
 
         TimelineView.Timeline = ViewModel.Timeline;
+        TimelineView.WaveformProvider = ViewModel.GetWaveform;
+        ViewModel.WaveformsChanged += (_, _) => TimelineView.Refresh();
         TimelineView.FrameRate = ViewModel.Format.FrameRate;
         TimelineView.PlayheadScrubbed += (_, t) => ViewModel.Seek(t);
         TimelineView.SelectionChanged += (_, id) => ViewModel.SelectedClipId = id;
@@ -50,6 +52,9 @@ public sealed partial class EditPage : Page
             case nameof(EditViewModel.Playhead):
                 TimelineView.Playhead = ViewModel.Playhead;
                 if (ViewModel.IsPlaying) TimelineView.EnsurePlayheadVisible();
+                break;
+            case nameof(EditViewModel.SelectedAsset):
+                if (!ReferenceEquals(AssetList.SelectedItem, ViewModel.SelectedAsset)) AssetList.SelectedItem = ViewModel.SelectedAsset;
                 break;
             case nameof(EditViewModel.SelectedClipId):
                 TimelineView.SelectedClipId = ViewModel.SelectedClipId;
@@ -143,8 +148,25 @@ public sealed partial class EditPage : Page
     private void AssetList_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e) =>
         ViewModel.AddToMainTrackCommand.Execute(null);
 
-    private void RemoveAsset_Click(object sender, RoutedEventArgs e) =>
-        ViewModel.RemoveAssetCommand.Execute((sender as FrameworkElement)?.Tag as MediaAssetItem);
+    private async void RemoveSelectedAsset_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel.SelectedAsset is { } item) await RemoveAssetAsync(item);
+    }
+
+    private async void RemoveAsset_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is MediaAssetItem item) await RemoveAssetAsync(item);
+    }
+
+    private async Task RemoveAssetAsync(MediaAssetItem item)
+    {
+        int used = ViewModel.CountClipsUsing(item);
+        if (used > 0 && !await ConfirmAsync("Medium entfernen?",
+                $"„{item.Name}“ wird in {used} Clip(s) auf der Timeline verwendet. Diese Clips werden ebenfalls entfernt.",
+                "Entfernen"))
+            return;
+        ViewModel.RemoveAssetCommand.Execute(item);
+    }
 
     public Visibility IsEmpty(int count) => count == 0 ? Visibility.Visible : Visibility.Collapsed;
 

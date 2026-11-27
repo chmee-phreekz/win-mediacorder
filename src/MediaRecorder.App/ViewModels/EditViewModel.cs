@@ -71,6 +71,7 @@ public sealed partial class EditViewModel : ObservableObject, IAsyncDisposable
     private readonly MediaImportService _import = new();
     private readonly PreviewController _preview = new();
     private readonly ExportService _export = new();
+    private readonly WaveformService _waveforms = new();
     private readonly DispatcherQueueTimer _refreshTimer;
     private readonly DispatcherQueueTimer _positionTimer;
     private CancellationTokenSource? _exportCts;
@@ -97,6 +98,8 @@ public sealed partial class EditViewModel : ObservableObject, IAsyncDisposable
             _dispatcher.TryEnqueue(() => ErrorMessage = $"Vorschau-Fehler: {e.ErrorMessage}");
         _preview.PreviewFailed += (_, msg) =>
             _dispatcher.TryEnqueue(() => ErrorMessage = $"Vorschau-Fehler: {msg}");
+
+        _waveforms.WaveformReady += (_, _) => _dispatcher.TryEnqueue(() => WaveformsChanged?.Invoke(this, EventArgs.Empty));
 
         _format = ProjectFormat.All[0];
     }
@@ -182,6 +185,7 @@ public sealed partial class EditViewModel : ObservableObject, IAsyncDisposable
                     Assets.Add(item);
                     SelectedAsset ??= item;
                     _ = LoadThumbnailAsync(item, file);
+                    _ = _waveforms.LoadAsync(asset);
                 }
                 catch (MediaImportException ex)
                 {
@@ -218,20 +222,35 @@ public sealed partial class EditViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
+    /// <summary>Wie viele Clips auf der Timeline das Medium verwenden (für die Sicherheitsabfrage).</summary>
+    public int CountClipsUsing(MediaAssetItem item) => Timeline.CountClipsUsing(item.Asset.Id);
+
+    /// <summary>
+    /// Entfernt ein Medium aus dem Pool, auch wenn es im Rückgängig-Verlauf vorkommt.
+    /// Clips auf der Timeline, die es verwenden, werden mit entfernt.
+    /// </summary>
     [RelayCommand]
     private void RemoveAsset(MediaAssetItem? item)
     {
         item ??= SelectedAsset;
         if (item is null) return;
-        if (!Timeline.TryRemoveAsset(item.Asset.Id))
-        {
-            InfoMessage = $"„{item.Name}“ wird in der Timeline (oder im Rückgängig-Verlauf) verwendet und kann nicht entfernt werden.";
-            return;
-        }
+        int removedClips = Timeline.RemoveAsset(item.Asset.Id);
         _preview.Builder.Forget(item.Asset.Id);
+        _waveforms.Forget(item.Asset.Id);
+        int index = Assets.IndexOf(item);
         Assets.Remove(item);
-        if (SelectedAsset == item) SelectedAsset = Assets.FirstOrDefault();
+        if (SelectedAsset == item || SelectedAsset is null)
+            SelectedAsset = Assets.Count == 0 ? null : Assets[Math.Clamp(index, 0, Assets.Count - 1)];
+        InfoMessage = removedClips > 0
+            ? $"„{item.Name}“ entfernt, dazu {removedClips} Clip(s) von der Timeline."
+            : null;
     }
+
+    /// <summary>Wellenform eines Mediums, sobald berechnet.</summary>
+    public Waveform? GetWaveform(Guid assetId) => _waveforms.Get(assetId);
+
+    /// <summary>Eine Wellenform ist fertig (auf dem UI-Thread).</summary>
+    public event EventHandler? WaveformsChanged;
 
     // ---------- Timeline-Bearbeitung ----------
 
@@ -470,6 +489,7 @@ public sealed partial class EditViewModel : ObservableObject, IAsyncDisposable
         // Kurz warten, damit ein abgebrochener Export seine temporäre Datei aufräumen kann.
         for (int i = 0; i < 20 && IsExporting; i++)
             await Task.Delay(100);
+        _waveforms.Dispose();
         _preview.Dispose();
     }
 }

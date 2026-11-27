@@ -193,12 +193,38 @@ public class TimelineTests
     }
 
     [Fact]
-    public void TryRemoveAsset_FailsWhileReferenced()
+    public void RemoveAsset_RemovesClipsAndCleansHistory()
+    {
+        var (tl, a, b) = Setup();
+        var ca = tl.AddClip(a.Id, 0);
+        tl.AddClip(b.Id, 0);
+        tl.Split(S(5), ca.Id);
+        tl.RemoveClip(tl.GetClips(0).Last().Id); // b wieder weg, nur noch im Verlauf
+
+        Assert.Equal(0, tl.CountClipsUsing(b.Id));
+        Assert.Equal(0, tl.RemoveAsset(b.Id));     // nur im Undo-Verlauf: trotzdem entfernbar
+
+        Assert.Equal(2, tl.RemoveAsset(a.Id));     // a liegt (geteilt) auf der Timeline
+        Assert.True(tl.IsEmpty);
+        Assert.Empty(tl.Assets);
+
+        // Kein Undo-/Redo-Schritt darf noch auf die entfernten Medien zeigen.
+        while (tl.Undo()) Assert.All(tl.AllClips, c => Assert.Contains(c.AssetId, tl.Assets.Select(x => x.Id)));
+        while (tl.Redo()) Assert.All(tl.AllClips, c => Assert.Contains(c.AssetId, tl.Assets.Select(x => x.Id)));
+    }
+
+    [Fact]
+    public void RemoveAsset_KeepsHistoryOfOtherAssets()
     {
         var (tl, a, b) = Setup();
         tl.AddClip(a.Id, 0);
-        Assert.False(tl.TryRemoveAsset(a.Id));
-        Assert.True(tl.TryRemoveAsset(b.Id));
+        tl.AddClip(b.Id, 1);
+        tl.RemoveAsset(b.Id);
+        Assert.Single(tl.AllClips);
+        Assert.True(tl.Undo());   // Hinzufügen von a rückgängig
+        Assert.True(tl.IsEmpty);
+        Assert.True(tl.Redo());
+        Assert.Single(tl.AllClips);
     }
 
     [Fact]
@@ -221,6 +247,64 @@ public class TimelineTests
         tl.Split(S(5), c.Id);
         tl.Undo();
         Assert.Equal(3, n);
+    }
+}
+
+public class SolidPngAndWaveformTests
+{
+    [Fact]
+    public void SolidPng_HasExactSizeAndValidData()
+    {
+        var png = Editing.SolidPng.Create(1920, 1080);
+        Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, png[..4]);
+        int w = (png[16] << 24) | (png[17] << 16) | (png[18] << 8) | png[19];
+        int h = (png[20] << 24) | (png[21] << 16) | (png[22] << 8) | png[23];
+        Assert.Equal((1920, 1080), (w, h));
+
+        int idatLen = (png[33] << 24) | (png[34] << 16) | (png[35] << 8) | png[36];
+        Assert.Equal("IDAT", System.Text.Encoding.ASCII.GetString(png, 37, 4));
+        using var z = new System.IO.Compression.ZLibStream(new MemoryStream(png, 41, idatLen), System.IO.Compression.CompressionMode.Decompress);
+        using var raw = new MemoryStream();
+        z.CopyTo(raw);
+        Assert.Equal(1080 * (1 + 1920 * 3), raw.Length);
+    }
+
+    private static MemoryStream Wav(short[] samples, int rate, int channels)
+    {
+        var ms = new MemoryStream();
+        var w = new BinaryWriter(ms);
+        w.Write("RIFF"u8.ToArray()); w.Write(36 + samples.Length * 2); w.Write("WAVE"u8.ToArray());
+        w.Write("fmt "u8.ToArray()); w.Write(16); w.Write((short)1); w.Write((short)channels); w.Write(rate);
+        w.Write(rate * channels * 2); w.Write((short)(channels * 2)); w.Write((short)16);
+        w.Write("LIST"u8.ToArray()); w.Write(4); w.Write("INFO"u8.ToArray()); // fremder Chunk
+        w.Write("data"u8.ToArray()); w.Write(samples.Length * 2);
+        foreach (var s in samples) w.Write(s);
+        ms.Position = 0;
+        return ms;
+    }
+
+    [Fact]
+    public void Waveform_ComputesPeaksPerTimeStep()
+    {
+        // 1 s Stille, dann 1 s halbe Lautstärke, 8 kHz stereo
+        var samples = new short[8000 * 2 * 2];
+        for (int i = 8000 * 2; i < samples.Length; i++) samples[i] = (short)(i % 2 == 0 ? 16384 : -16384);
+        var wf = Editing.Waveform.FromWav(Wav(samples, 8000, 2), peaksPerSecond: 10);
+
+        Assert.Equal(20, wf.Peaks.Length);
+        Assert.Equal(TimeSpan.FromSeconds(2), wf.Duration);
+        Assert.Equal(0f, wf.MaxIn(TimeSpan.Zero, TimeSpan.FromSeconds(1)));
+        Assert.Equal(0.5f, wf.MaxIn(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)), 3);
+
+        var cols = wf.Sample(TimeSpan.FromSeconds(0.5), TimeSpan.FromSeconds(1.5), 2);
+        Assert.Equal(0f, cols[0]);
+        Assert.Equal(0.5f, cols[1], 3);
+    }
+
+    [Fact]
+    public void Waveform_RejectsNonWav()
+    {
+        Assert.Throws<InvalidDataException>(() => Editing.Waveform.FromWav(new MemoryStream(new byte[64])));
     }
 }
 

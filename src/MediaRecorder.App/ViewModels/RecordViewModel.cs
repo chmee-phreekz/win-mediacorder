@@ -12,6 +12,7 @@ using MediaRecorder.Core.Audio;
 using MediaRecorder.Core.Devices;
 using MediaRecorder.Core.Encoding;
 using MediaRecorder.Core.Recording;
+using MediaRecorder.Core.Video;
 using Microsoft.UI.Dispatching;
 using Windows.Media.Playback;
 
@@ -43,11 +44,14 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
         _fileNamePattern = _options.FileNamePattern;
         LoadEncoding(_options.Encoding);
         LoadCompressor(_options.Compressor);
+        _lutEnabled = _options.Lut?.Enabled ?? false;
+        _lutPath = _options.Lut?.Path;
         UpdateCodecLists();
 
         // Alle Ereignisse kommen aus Hintergrund-Threads: immer auf den UI-Thread wechseln und Fehler abfangen.
         _backend.StateChanged += (_, s) => OnUi(() => State = s);
         _backend.Faulted += (_, f) => OnUi(() => OnFaulted(f));
+        _backend.LutPreviewActiveChanged += (_, active) => OnUi(() => IsLutPreviewActive = active);
         _meter.LevelsAvailable += (_, l) =>
         {
             // Nur den neuesten Wert übergeben; höchstens ein UI-Auftrag gleichzeitig.
@@ -117,6 +121,38 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
     [ObservableProperty] private double _compressorGainDb;
     [ObservableProperty] private string _gainReductionText = "";
     [ObservableProperty] private string? _compressorWarning;
+    /// <summary>Button „Jetzt registrieren“ zeigen (Effekt nicht registriert, Registrierung möglich).</summary>
+    [ObservableProperty] private bool _canRegisterCompressor;
+    [ObservableProperty] private bool _isRegisteringCompressor;
+    [ObservableProperty] private bool _canRegisterLut;
+
+    [RelayCommand]
+    private async Task RegisterCompressorAsync()
+    {
+        if (IsRegisteringCompressor) return;
+        IsRegisteringCompressor = true;
+        try
+        {
+            var error = await EffectRegistration.RequestRegistrationAsync();
+            if (error is not null)
+            {
+                ShowError(error);
+                return;
+            }
+            InfoMessage = "Effekte registriert. Kompressor und LUT wirken ab jetzt auch auf die Aufnahme.";
+            if (!IsRecording) await OpenDevicesAsync(); // Effekt neu einbinden
+            else ShowError("Der Kompressor wird nach dem Ende der laufenden Aufnahme eingebunden.");
+        }
+        catch (Exception ex)
+        {
+            ErrorReporter.Report(ex, "Kompressor registrieren");
+        }
+        finally
+        {
+            IsRegisteringCompressor = false;
+            UpdateCompressorWarning();
+        }
+    }
 
     public double CompressorMinThreshold => CompressorSettings.MinThresholdDb;
     public double CompressorMaxThreshold => CompressorSettings.MaxThresholdDb;
@@ -164,10 +200,23 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
     private void UpdateCompressorWarning()
     {
         bool hasAudio = !string.IsNullOrEmpty(SelectedAudioDevice?.Id);
-        CompressorWarning = CompressorEnabled && hasAudio && !_backend.IsCompressorActive && _backend.CompressorError is not null
+        bool notActive = CompressorEnabled && hasAudio && !_backend.IsCompressorActive && _backend.CompressorError is not null;
+        bool registered = EffectRegistration.IsRegisteredForThisInstall();
+        CanRegisterCompressor = notActive && !registered;
+
+        // LUT: gleiche Registrierung wie der Kompressor.
+        bool lutNotActive = LutEnabled && HasLut && !_backend.IsLutEffectActive && _backend.LutEffectError is not null;
+        CanRegisterLut = lutNotActive && !registered;
+        LutWarning = !lutNotActive ? null : registered
+            ? $"Die LUT wirkt nur in der Vorschau, die Aufnahme bleibt unverändert. ({_backend.LutEffectError})"
+            : "Die Effekte müssen einmalig in Windows registriert werden (Adminrechte), damit die LUT auch auf die Aufnahme wirkt. Bis dahin wirkt sie nur in der Vorschau.";
+
+        if (!notActive) { CompressorWarning = null; return; }
+        CompressorWarning = registered
             ? "Der Kompressor konnte nicht in die Aufnahme eingebunden werden. Das VU-Meter zeigt das komprimierte Signal, " +
               $"die Datei wird aber unkomprimiert aufgenommen. ({_backend.CompressorError})"
-            : null;
+            : "Der Kompressor muss einmalig in Windows registriert werden (Adminrechte), damit er auch auf die Aufnahme wirkt. " +
+              "Bis dahin zeigt nur das VU-Meter das komprimierte Signal.";
     }
 
     private void LoadCompressor(CompressorSettings c)
@@ -179,6 +228,70 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
         _compressorGainDb = s.GainDb;
         _backend.SetCompressor(s);
         _meter.Compressor.Settings = s;
+    }
+
+    // ------------------------------------------------------------ LUT
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LutName), nameof(HasLut))]
+    private string? _lutPath;
+    [ObservableProperty] private bool _lutEnabled;
+    [ObservableProperty] private string? _lutWarning;
+    [ObservableProperty] private bool _isLutPreviewActive;
+
+    public bool HasLut => !string.IsNullOrEmpty(LutPath);
+
+    /// <summary>LUT-Vorschaubild (Hintergrund-Thread); der Empfänger gibt das Bitmap frei.</summary>
+    public event EventHandler<Windows.Graphics.Imaging.SoftwareBitmap>? LutPreviewFrame
+    {
+        add => _backend.LutPreviewFrame += value;
+        remove => _backend.LutPreviewFrame -= value;
+    }
+    public string LutName => HasLut ? System.IO.Path.GetFileName(LutPath!) : "Keine LUT gewählt";
+
+    private bool _suppressLutApply;
+
+    partial void OnLutEnabledChanged(bool value) { if (!_suppressLutApply) _ = ApplyLutAsync(); }
+
+    /// <summary>Von der Page nach Auswahl einer .cube-Datei.</summary>
+    public async Task SetLutFileAsync(string path)
+    {
+        LutPath = path;
+        _suppressLutApply = true;
+        LutEnabled = true;
+        _suppressLutApply = false;
+        await ApplyLutAsync();
+    }
+
+    [RelayCommand]
+    private async Task ClearLutAsync()
+    {
+        _suppressLutApply = true;
+        LutEnabled = false;
+        _suppressLutApply = false;
+        LutPath = null;
+        await ApplyLutAsync();
+    }
+
+    private async Task ApplyLutAsync()
+    {
+        var settings = new LutSettings { Enabled = LutEnabled && HasLut, Path = LutPath };
+        try
+        {
+            await _backend.SetLutAsync(settings);
+            _options.Lut = new LutSettings { Enabled = LutEnabled, Path = LutPath };
+            RecordingSettingsStore.Save(_options);
+        }
+        catch (Exception ex)
+        {
+            ErrorReporter.Log(ex, "LUT laden");
+            ShowError($"Die LUT „{LutName}“ konnte nicht geladen werden: {ex.Message}");
+            _suppressLutApply = true;
+            LutEnabled = false;
+            _suppressLutApply = false;
+            try { await _backend.SetLutAsync(new LutSettings()); } catch { }
+        }
+        UpdateCompressorWarning();
     }
 
     // ------------------------------------------------------------ Geräte & Formate
@@ -335,6 +448,7 @@ public sealed partial class RecordViewModel : ObservableObject, IAsyncDisposable
 
     public async Task InitializeAsync()
     {
+        if (LutEnabled && HasLut) await ApplyLutAsync();
         _devices.StartWatching();
         await RefreshDevicesAsync();
         UpdateFreeSpace();

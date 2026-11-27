@@ -110,9 +110,13 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="Medien" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
-                        <Button Grid.Column="1" Click="Import_Click" ToolTipService.ToolTip="Mediendateien importieren (Strg+I)">
+                        <Button Grid.Column="1" Click="RemoveSelectedAsset_Click" ToolTipService.ToolTip="Ausgewähltes Medium entfernen (auch per Rechtsklick)">
+                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                        </Button>
+                        <Button Grid.Column="2" Click="Import_Click" ToolTipService.ToolTip="Mediendateien importieren (Strg+I)">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <FontIcon Glyph="&#xE8B5;" FontSize="14" />
                                 <TextBlock Text="Importieren" />

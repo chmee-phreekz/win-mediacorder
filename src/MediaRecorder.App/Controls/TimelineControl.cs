@@ -34,7 +34,8 @@ public sealed class TimelineControl : UserControl
     public const string DragPrefix = "asset:";
 
     private const double RulerHeight = 30;
-    private const double TrackHeight = 64;
+    private const double TrackHeight = 78;
+    private const double WaveHeight = 30;
     private const double TrackGap = 6;
     private const double EdgeGrab = 7;
     private const double SnapPixels = 8;
@@ -128,6 +129,12 @@ public sealed class TimelineControl : UserControl
             Rebuild();
         }
     }
+
+    /// <summary>Liefert die Wellenform eines Mediums (null = noch nicht berechnet oder kein Ton).</summary>
+    public Func<Guid, Waveform?>? WaveformProvider { get; set; }
+
+    /// <summary>Neu zeichnen, z. B. wenn eine Wellenform fertig berechnet wurde.</summary>
+    public void Refresh() => Rebuild();
 
     /// <summary>Bildrate für Einrasten auf Frames (Projektbildrate).</summary>
     public double FrameRate { get; set; } = 30;
@@ -285,7 +292,7 @@ public sealed class TimelineControl : UserControl
         if (asset.Kind == MediaKind.Audio)
             baseColor = Color.FromArgb(255, 34, 160, 107); // Audio grün, egal auf welcher Spur
 
-        var label = new StackPanel { Spacing = 2, IsHitTestVisible = false };
+        var label = new StackPanel { Spacing = 2, IsHitTestVisible = false, Margin = new Thickness(8, 5, 8, 0) };
         var title = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         title.Children.Add(new FontIcon { Glyph = asset.Kind switch { MediaKind.Audio => "", MediaKind.Image => "", _ => "" }, FontSize = 12 });
         if (clip.AudioMuted)
@@ -302,13 +309,64 @@ public sealed class TimelineControl : UserControl
             Background = new SolidColorBrush(selected ? Lighten(baseColor, 0.25) : baseColor),
             BorderBrush = new SolidColorBrush(selected ? Colors.White : Lighten(baseColor, 0.35)),
             BorderThickness = new Thickness(selected ? 2 : 1),
-            Padding = new Thickness(8, 6, 8, 6),
-            Child = label,
+            Child = BuildClipContent(clip, asset, label, Math.Max(2, X(clip.Duration))),
             IsHitTestVisible = false, // Treffertests rechnen wir selbst (Kanten-Griffe)
         };
         ToolTipService.SetToolTip(border, $"{asset.DisplayName}\nQuelle {Timecode.Format(clip.SourceIn, FrameRate)} – {Timecode.Format(clip.SourceOut, FrameRate)}");
         Place(border, X(clip.Start), TrackY(clip.Track) + 2);
         _clipVisuals[clip.Id] = border;
+    }
+
+    /// <summary>Beschriftung oben, darunter die Wellenform der Tonspur (sofern vorhanden und berechnet).</summary>
+    private UIElement BuildClipContent(TimelineClip clip, MediaAsset asset, UIElement label, double width)
+    {
+        var grid = new Grid { IsHitTestVisible = false };
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(WaveHeight) });
+        grid.Children.Add(label);
+
+        if (asset.HasAudio && WaveformProvider?.Invoke(asset.Id) is { } wave && width > 4)
+        {
+            var shape = BuildWaveform(wave, clip, width - 2, WaveHeight - 4);
+            shape.Opacity = clip.AudioMuted ? 0.3 : 0.85;
+            Grid.SetRow(shape, 1);
+            grid.Children.Add(shape);
+        }
+        else if (asset.HasAudio)
+        {
+            // Noch nicht berechnet: dezente Mittellinie als Platzhalter für die Tonspur.
+            var line = new Rectangle { Height = 1, Fill = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 4, 0) };
+            Grid.SetRow(line, 1);
+            grid.Children.Add(line);
+        }
+        return grid;
+    }
+
+    private static Polygon BuildWaveform(Waveform wave, TimelineClip clip, double width, double height)
+    {
+        int columns = (int)Math.Clamp(width / 2, 1, 3000);
+        var levels = wave.Sample(clip.SourceIn, clip.SourceOut, columns);
+        double mid = height / 2, step = width / columns;
+        var poly = new Polygon
+        {
+            Fill = new SolidColorBrush(Color.FromArgb(230, 235, 240, 255)),
+            Margin = new Thickness(1, 2, 1, 2),
+            IsHitTestVisible = false,
+        };
+        // Obere Hüllkurve von links nach rechts, untere zurück; mindestens 1 px, damit Stille sichtbar bleibt.
+        for (int i = 0; i < columns; i++)
+        {
+            double a = Math.Max(0.5, levels[i] * mid);
+            poly.Points.Add(new Point(i * step, mid - a));
+            poly.Points.Add(new Point((i + 1) * step, mid - a));
+        }
+        for (int i = columns - 1; i >= 0; i--)
+        {
+            double a = Math.Max(0.5, levels[i] * mid);
+            poly.Points.Add(new Point((i + 1) * step, mid + a));
+            poly.Points.Add(new Point(i * step, mid + a));
+        }
+        return poly;
     }
 
     private void UpdatePlayhead()

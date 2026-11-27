@@ -18,5 +18,6 @@
   -->
   <file name="WinRT.Host.dll">
     <activatableClass name="MediaRecorder.Effects.CompressorEffect" threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
+    <activatableClass name="MediaRecorder.Effects.LutEffect" threadingModel="both" xmlns="urn:schemas-microsoft-com:winrt.v1" />
   </file>
 </assembly>

@@ -50,3 +50,16 @@ Windows-Einstellungen > Datenschutz > Kamera und Mikrofon: Zugriff für Desktop-
 - Das VU-Meter rechnet denselben Kompressor mit denselben Einstellungen und zeigt so sofort das komprimierte Signal
   sowie die aktuelle Pegelreduktion.
 - Lässt sich der Effekt nicht einbinden, erscheint eine Warnung; die Aufnahme läuft dann unkomprimiert weiter.
+- **Registrierung (unpackaged):** Media Foundation findet den Effekt nur über HKLM\SOFTWARE\Microsoft\WindowsRuntime\ActivatableClassId.
+  Ist er nicht registriert, zeigt die Kompressor-Karte „Jetzt registrieren (Adminrechte)“. Die App startet sich dann einmal mit
+  UAC-Abfrage (`MediaRecorder.exe --register-effect`), schreibt den Eintrag (zeigt auf WinRT.Host.dll im Programmordner) und
+  bindet den Effekt neu ein. Nach Verschieben der App (z.B. Debug ↔ Release) erneut registrieren. Entfernen: `MediaRecorder.exe --unregister-effect` als Admin.
+
+## LUT
+- Karte „LUT“ auf der Aufnahmeseite: .cube-Datei wählen (3D, auch 1D), ein/aus, entfernen. Auch während der Aufnahme schaltbar. Wird gespeichert.
+- **Aufnahme:** Video-Effekt `MediaRecorder.Effects.LutEffect` im Record-Stream von MediaCapture (NV12, CPU, mehrkernig,
+  vorberechnete YUV-Tabellen; BT.709 ab 720p, sonst BT.601, begrenzter Bereich). Gleiche HKLM-Registrierung wie der Kompressor.
+- **Vorschau:** Bei aktiver LUT läuft die Vorschau über einen MediaFrameReader (BGRA8, max. 1280 px breit) mit derselben LUT,
+  sonst über den MediaPlayer. Auf echter Hardware prüfen: Sieht die Vorschau doppelt „gegradet“ aus, wirkt der Effekt bereits
+  auf den Vorschau-Stream; dann LUT nur noch an einer Stelle anwenden.
+- Ist der Effekt nicht eingebunden, zeigt die Karte eine Warnung (mit Registrieren-Knopf); die LUT wirkt dann nur in der Vorschau.
